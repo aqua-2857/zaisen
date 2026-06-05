@@ -136,17 +136,26 @@
                     const stops = train["odpt:trainTimetableObject"];
                     if (!stops || stops.length < 2) return;
 
+                    const firstStop = stops[0];
+                    const lastStop = stops[stops.length - 1];
+                    const startTime = timeToMinutes(firstStop["odpt:departureTime"] || firstStop["odpt:arrivalTime"]);
+                    const endTime = timeToMinutes(lastStop["odpt:arrivalTime"] || lastStop["odpt:departureTime"]);
+
+                    if (nowMin < startTime - 2 || nowMin > endTime + 2) return;
+
+                    let bestTarget = null;
+
                     for (let i = 0; i < stops.length; i++) {
                         const currentStop = stops[i];
                         const nextStop = stops[i + 1];
 
-                        const depStationId = (currentStop["odpt:departureStation"] || currentStop["odpt:arrivalStation"]).split(".").pop();
+                        const stationId = (currentStop["odpt:departureStation"] || currentStop["odpt:arrivalStation"]).split(".").pop();
                         const arrTime = timeToMinutes(currentStop["odpt:arrivalTime"]);
                         const depTime = timeToMinutes(currentStop["odpt:departureTime"]);
+                        const baseTime = depTime || arrTime;
 
-                        if (arrTime && depTime && nowMin >= arrTime && nowMin <= depTime) {
-                            const target = document.getElementById(`station-${depStationId}`);
-                            if (target) injectTrain(target, trainNum);
+                        if (baseTime && Math.abs(nowMin - baseTime) <= 1) {
+                            bestTarget = document.getElementById(`station-${stationId}`);
                             break;
                         }
 
@@ -155,13 +164,16 @@
                             const nextArrTime = timeToMinutes(nextStop["odpt:arrivalTime"]);
                             const currentDepTime = depTime || arrTime;
 
-                            if (currentDepTime && nextArrTime && nowMin > currentDepTime && nowMin < nextArrTime) {
-                                const target = document.getElementById(`between-${depStationId}-${nextStationId}`) 
-                                            || document.getElementById(`between-${nextStationId}-${depStationId}`);
-                                if (target) injectTrain(target, trainNum);
+                            if (currentDepTime && nextArrTime && nowMin >= currentDepTime && nowMin <= nextArrTime) {
+                                bestTarget = document.getElementById(`between-${stationId}-${nextStationId}`) 
+                                          || document.getElementById(`between-${nextStationId}-${stationId}`);
                                 break;
                             }
                         }
+                    }
+
+                    if (bestTarget) {
+                        injectTrain(bestTarget, trainNum);
                     }
                 });
             } catch (error) {
