@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>埼京・川越線 列車位置情報 (セキュア版)</title>
+    <style>
+        body { background: #111; color: white; font-family: sans-serif; padding: 20px; }
+        h1 { font-size: 20px; margin-bottom: 5px; }
+        #current-time { color: #888; margin-bottom: 20px; font-size: 14px; }
+        
+        /* セキュリティ設定エリアのスタイル */
+        .config-box { background: #222; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #333; }
+        .config-box input { background: #333; color: white; border: 1px solid #555; padding: 6px; width: 80%; max-width: 400px; border-radius: 4px; }
+        .config-box button { background: #00b261; color: white; border: none; padding: 6px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .config-box button.delete { background: #d32f2f; margin-left: 10px; }
+        
+        /* 路線図スタイル */
+        .line-container { margin-left: 60px; position: relative; display: none; } /* 初期状態は非表示 */
+        .line-container::before { content: ""; position: absolute; left: 13px; top: 10px; bottom: 10px; width: 6px; background: #00b261; z-index: 1; }
+        .station-row { position: relative; height: 30px; display: flex; align-items: center; z-index: 2; }
+        .station-dot { width: 12px; height: 12px; border-radius: 50%; background: white; border: 4px solid #00b261; margin-right: 15px; }
+        .station-name { font-weight: bold; font-size: 14px; }
+        .between-row { position: relative; height: 40px; display: flex; align-items: center; z-index: 2; }
+        .train-badge { position: absolute; left: -55px; background: #ffeb3b; color: black; padding: 2px 6px; font-weight: bold; border-radius: 4px; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+    <h1>埼京・川越線 列車位置情報</h1>
+    <div id="current-time">APIキーを設定してください。</div>
+    
+    <div class="config-box" id="config-area">
+        <h3 style="margin-top:0; font-size:14px;">🔑 ODPT APIキー設定 (あなたのスマホにのみ安全に保存されます)</h3>
+        <div id="key-input-form">
+            <input type="password" id="api-key-input" placeholder="ここに長〜いトークンを貼り付け">
+            <button onclick="saveApiKey()">保存して起動</button>
+        </div>
+        <div id="key-status-form" style="display: none;">
+            <span style="color: #00b261; font-weight: bold;">➔ APIキーは安全に記憶されています。</span>
+            <button class="delete" onclick="deleteApiKey()">キーを削除</button>
+        </div>
+    </div>
+    
+    <div class="line-container" id="route-map"></div>
+
+    <script>
+        // 【超安全】プログラム内には一切キーを書かない！
+        let API_KEY = ""; 
+        
+        let stationOrderList = [];
+        let timerId = null;
+
+        // アプリ起動時にブラウザの記憶（LocalStorage）からキーを探す
+        window.onload = function() {
+            const savedKey = localStorage.getItem("odpt_my_api_key");
+            if (savedKey) {
+                API_KEY = savedKey;
+                document.getElementById("key-input-form").style.display = "none";
+                document.getElementById("key-status-form").style.display = "block";
+                document.getElementById("route-map").style.display = "block";
+                
+                // キーがあればシステムを起動
+                initRouteMap();
+            }
+        };
+
+        // キーをブラウザに保存する関数
+        function saveApiKey() {
+            const keyInput = document.getElementById("api-key-input").value.trim();
+            if (!keyInput) {
+                alert("キーを入力してください");
+                return;
+            }
+            localStorage.setItem("odpt_my_api_key", keyInput);
+            location.reload(); // 画面を再読み込みして起動
+        }
+
+        // キーをブラウザから削除する関数
+        function deleteApiKey() {
+            if (confirm("ブラウザからAPIキーを削除しますか？")) {
+                localStorage.removeItem("odpt_my_api_key");
+                location.reload();
+            }
+        }
+
+        // --- ここから下は先ほどの自動生成ロジックと同じ ---
+        async function initRouteMap() {
+            const RAILWAY_URL = `https://api.odpt.org/api/v4/odpt:Railway?acl:consumerKey=${API_KEY}&owl:sameAs=odpt.Railway:JR-East.SaikyoKawagoe`;
+            try {
+                const response = await fetch(RAILWAY_URL);
+                const railwayData = await response.json();
+                const odptStations = railwayData[0]["odpt:stationOrder"];
+                const container = document.getElementById("route-map");
+                
+                odptStations.forEach((st, index) => {
+                    const stationId = st["odpt:station"].split(".").pop();
+                    const stationName = st["odpt:stationTitle"]["ja"];
+                    stationOrderList.push({ id: stationId, name: stationName });
+
+                    const stRow = document.createElement("div");
+                    stRow.className = "station-row";
+                    stRow.id = `station-${stationId}`;
+                    stRow.innerHTML = `<div class="station-dot"></div><div class="station-name">${stationName}</div>`;
+                    container.appendChild(stRow);
+
+                    if (index < odptStations.length - 1) {
+                        const nextStationId = odptStations[index + 1]["odpt:station"].split(".").pop();
+                        const betRow = document.createElement("div");
+                        betRow.className = "between-row";
+                        betRow.id = `between-${stationId}-${nextStationId}`;
+                        container.appendChild(betRow);
+                    }
+                });
+
+                updatePositions();
+                timerId = setInterval(updatePositions, 60000);
+
+            } catch (error) {
+                document.getElementById("current-time").innerText = "エラー：APIキーが正しくないか、データが取れませんでした。";
+                console.error(error);
+            }
+        }
+
+        function timeToMinutes(timeStr) {
+            if (!timeStr) return null;
+            const [h, m] = timeStr.split(":").map(Number);
+            return h * 60 + m;
+        }
+
+        async function updatePositions() {
+            const now = new Date();
+            const nowStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            document.getElementById("current-time").innerText = `現在時刻: ${nowStr} (時刻表から位置を計算中)`;
+            const nowMin = timeToMinutes(nowStr);
+
+            const TIMETABLE_URL = `https://api.odpt.org/api/v4/odpt:TrainTimetable?acl:consumerKey=${API_KEY}&odpt:railway=odpt.Railway:JR-East.SaikyoKawagoe`;
+
+            try {
+                const response = await fetch(TIMETABLE_URL);
+                const timetables = await response.json();
+
+                document.querySelectorAll(".train-badge").forEach(el => el.remove());
+
+                timetables.forEach(train => {
+                    const trainNum = train["odpt:trainNumber"];
+                    const stops = train["odpt:trainTimetableObject"];
+                    if (!stops || stops.length < 2) return;
+
+                    for (let i = 0; i < stops.length; i++) {
+                        const currentStop = stops[i];
+                        const nextStop = stops[i + 1];
+
+                        const depStationId = (currentStop["odpt:departureStation"] || currentStop["odpt:arrivalStation"]).split(".").pop();
+                        const arrTime = timeToMinutes(currentStop["odpt:arrivalTime"]);
+                        const depTime = timeToMinutes(currentStop["odpt:departureTime"]);
+
+                        if (arrTime && depTime && nowMin >= arrTime && nowMin <= depTime) {
+                            const target = document.getElementById(`station-${depStationId}`);
+                            if (target) injectTrain(target, trainNum);
+                            break;
+                        }
+
+                        if (nextStop) {
+                            const nextStationId = (nextStop["odpt:arrivalStation"] || nextStop["odpt:departureStation"]).split(".").pop();
+                            const nextArrTime = timeToMinutes(nextStop["odpt:arrivalTime"]);
+                            const currentDepTime = depTime || arrTime;
+
+                            if (currentDepTime && nextArrTime && nowMin > currentDepTime && nowMin < nextArrTime) {
+                                const target = document.getElementById(`between-${depStationId}-${nextStationId}`) 
+                                            || document.getElementById(`between-${nextStationId}-${depStationId}`);
+                                if (target) injectTrain(target, trainNum);
+                                break;
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        function injectTrain(target, trainNumber) {
+            const badge = document.createElement("div");
+            badge.className = "train-badge";
+            badge.innerText = trainNumber;
+            target.appendChild(badge);
+        }
+    </script>
+</body>
+</html>
