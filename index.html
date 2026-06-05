@@ -1,21 +1,20 @@
+<!-- 2026/06/05 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>埼京・川越線 列車位置情報 (セキュア版)</title>
+    <title>列車在線アプリ</title>
     <style>
         body { background: #111; color: white; font-family: sans-serif; padding: 20px; }
         h1 { font-size: 20px; margin-bottom: 5px; }
         #current-time { color: #888; margin-bottom: 20px; font-size: 14px; }
         
-        /* セキュリティ設定エリアのスタイル */
         .config-box { background: #222; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #333; }
-        .config-box input { background: #333; color: white; border: 1px solid #555; padding: 6px; width: 80%; max-width: 400px; border-radius: 4px; }
-        .config-box button { background: #00b261; color: white; border: none; padding: 6px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .config-box input { background: #333; color: white; border: 1px solid #555; padding: 8px; width: 75%; max-width: 400px; border-radius: 4px; margin-right: 8px; }
+        .config-box button { background: #00b261; color: white; border: none; padding: 8px 16px; font-weight: bold; border-radius: 4px; cursor: pointer; }
         .config-box button.delete { background: #d32f2f; margin-left: 10px; }
         
-        /* 路線図スタイル */
-        .line-container { margin-left: 60px; position: relative; display: none; } /* 初期状態は非表示 */
+        .line-container { margin-left: 60px; position: relative; display: none; } 
         .line-container::before { content: ""; position: absolute; left: 13px; top: 10px; bottom: 10px; width: 6px; background: #00b261; z-index: 1; }
         .station-row { position: relative; height: 30px; display: flex; align-items: center; z-index: 2; }
         .station-dot { width: 12px; height: 12px; border-radius: 50%; background: white; border: 4px solid #00b261; margin-right: 15px; }
@@ -26,17 +25,16 @@
 </head>
 <body>
 
-    <h1>埼京・川越線 列車位置情報</h1>
-    <div id="current-time">APIキーを設定してください。</div>
+    <h1>列車在線アプリ</h1>
+    <div id="current-time">パスワードを入力</div>
     
     <div class="config-box" id="config-area">
-        <h3 style="margin-top:0; font-size:14px;">🔑 ODPT APIキー設定 (あなたのスマホにのみ安全に保存されます)</h3>
+        <h3 style="margin-top:0; font-size:14px;">パスワードを入力</h3>
         <div id="key-input-form">
-            <input type="password" id="api-key-input" placeholder="ここに長〜いトークンを貼り付け">
-            <button onclick="saveApiKey()">保存して起動</button>
+            <input type="password" id="api-key-input" placeholder="パスワードを入力">
+            <button onclick="saveApiKey()">起動</button>
         </div>
         <div id="key-status-form" style="display: none;">
-            <span style="color: #00b261; font-weight: bold;">➔ APIキーは安全に記憶されています。</span>
             <button class="delete" onclick="deleteApiKey()">キーを削除</button>
         </div>
     </div>
@@ -44,13 +42,11 @@
     <div class="line-container" id="route-map"></div>
 
     <script>
-        // 【超安全】プログラム内には一切キーを書かない！
         let API_KEY = ""; 
         
         let stationOrderList = [];
         let timerId = null;
 
-        // アプリ起動時にブラウザの記憶（LocalStorage）からキーを探す
         window.onload = function() {
             const savedKey = localStorage.getItem("odpt_my_api_key");
             if (savedKey) {
@@ -59,12 +55,10 @@
                 document.getElementById("key-status-form").style.display = "block";
                 document.getElementById("route-map").style.display = "block";
                 
-                // キーがあればシステムを起動
                 initRouteMap();
             }
         };
 
-        // キーをブラウザに保存する関数
         function saveApiKey() {
             const keyInput = document.getElementById("api-key-input").value.trim();
             if (!keyInput) {
@@ -72,20 +66,18 @@
                 return;
             }
             localStorage.setItem("odpt_my_api_key", keyInput);
-            location.reload(); // 画面を再読み込みして起動
+            location.reload();
         }
 
-        // キーをブラウザから削除する関数
         function deleteApiKey() {
-            if (confirm("ブラウザからAPIキーを削除しますか？")) {
+            if (confirm("キーを削除しますか？")) {
                 localStorage.removeItem("odpt_my_api_key");
                 location.reload();
             }
         }
 
-        // --- ここから下は先ほどの自動生成ロジックと同じ ---
         async function initRouteMap() {
-            const RAILWAY_URL = `https://api.odpt.org/api/v4/odpt:Railway?acl:consumerKey=${API_KEY}&owl:sameAs=odpt.Railway:JR-East.SaikyoKawagoe`;
+            const RAILWAY_URL = `https://api.odpt.org/api/v4/odpt:Railway?acl:consumerKey=${API_KEY}&owl:sameAs=JR-East.SaikyoKawagoe`;
             try {
                 const response = await fetch(RAILWAY_URL);
                 const railwayData = await response.json();
@@ -133,7 +125,7 @@
             document.getElementById("current-time").innerText = `現在時刻: ${nowStr} (時刻表から位置を計算中)`;
             const nowMin = timeToMinutes(nowStr);
 
-            const TIMETABLE_URL = `https://api.odpt.org/api/v4/odpt:TrainTimetable?acl:consumerKey=${API_KEY}&odpt:railway=odpt.Railway:JR-East.SaikyoKawagoe`;
+            const TIMETABLE_URL = `https://api.odpt.org/api/v4/odpt:TrainTimetable?acl:consumerKey=${API_KEY}&odpt:railway=JR-East.SaikyoKawagoe`;
 
             try {
                 const response = await fetch(TIMETABLE_URL);
