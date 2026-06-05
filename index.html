@@ -14,13 +14,20 @@
         .config-box button { background: #00b261; color: white; border: none; padding: 8px 16px; font-weight: bold; border-radius: 4px; cursor: pointer; }
         .config-box button.delete { background: #d32f2f; margin-left: 10px; }
         
-        .line-container { margin-left: 60px; position: relative; display: none; } 
-        .line-container::before { content: ""; position: absolute; left: 13px; top: 10px; bottom: 10px; width: 6px; background: #0074bc; z-index: 1; } 
-        .station-row { position: relative; height: 30px; display: flex; align-items: center; z-index: 2; }
-        .station-dot { width: 12px; height: 12px; border-radius: 50%; background: white; border: 4px solid #0074bc; margin-right: 15px; }
-        .station-name { font-weight: bold; font-size: 14px; }
-        .between-row { position: relative; height: 40px; display: flex; align-items: center; z-index: 2; }
-        .train-badge { position: absolute; left: -55px; background: #ffeb3b; color: black; padding: 2px 6px; font-weight: bold; border-radius: 4px; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .line-container { margin-left: 20px; position: relative; display: none; } 
+        
+        .station-row { position: relative; height: 40px; display: flex; align-items: center; }
+        .between-row { position: relative; height: 40px; display: flex; align-items: center; }
+
+        .cell-name { width: 120px; font-weight: bold; font-size: 14px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+        .cell-up { width: 90px; position: relative; display: flex; justify-content: flex-end; padding-right: 15px; }
+        .cell-line { width: 30px; position: relative; display: flex; justify-content: center; align-items: center; }
+        .cell-down { width: 90px; position: relative; display: flex; justify-content: flex-start; padding-left: 15px; }
+
+        .station-dot { width: 12px; height: 12px; border-radius: 50%; background: white; border: 4px solid #0074bc; z-index: 3; }
+        .line-bar { position: absolute; top: 0; bottom: 0; width: 6px; background: #0074bc; z-index: 1; }
+
+        .train-badge { background: #ffeb3b; color: black; padding: 2px 6px; font-weight: bold; border-radius: 4px; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -85,12 +92,17 @@
                 odptStations.forEach((st, index) => {
                     const stationId = st["odpt:station"].split(".").pop();
                     const stationName = st["odpt:stationTitle"]["ja"];
-                    stationOrderList.push({ id: stationId, name: stationName });
+                    stationOrderList.push({ id: stationId, name: stationName, index: index });
 
                     const stRow = document.createElement("div");
                     stRow.className = "station-row";
                     stRow.id = `station-${stationId}`;
-                    stRow.innerHTML = `<div class="station-dot"></div><div class="station-name">${stationName}</div>`;
+                    stRow.innerHTML = `
+                        <div class="cell-name">${stationName}</div>
+                        <div class="cell-up" id="station-${stationId}-up"></div>
+                        <div class="cell-line"><div class="station-dot"></div></div>
+                        <div class="cell-down" id="station-${stationId}-down"></div>
+                    `;
                     container.appendChild(stRow);
 
                     if (index < odptStations.length - 1) {
@@ -98,6 +110,12 @@
                         const betRow = document.createElement("div");
                         betRow.className = "between-row";
                         betRow.id = `between-${stationId}-${nextStationId}`;
+                        betRow.innerHTML = `
+                            <div class="cell-name"></div>
+                            <div class="cell-up" id="between-${stationId}-${nextStationId}-up"></div>
+                            <div class="cell-line"><div class="line-bar"></div></div>
+                            <div class="cell-down" id="between-${stationId}-${nextStationId}-down"></div>
+                        `;
                         container.appendChild(betRow);
                     }
                 });
@@ -115,6 +133,11 @@
             if (!timeStr) return null;
             const [h, m] = timeStr.split(":").map(Number);
             return h * 60 + m;
+        }
+
+        function getStationIndex(stationId) {
+            const found = stationOrderList.find(st => st.id === stationId);
+            return found ? found.index : -1;
         }
 
         async function updatePositions() {
@@ -141,7 +164,27 @@
                     const startTime = timeToMinutes(firstStop["odpt:departureTime"] || firstStop["odpt:arrivalTime"]);
                     const endTime = timeToMinutes(lastStop["odpt:arrivalTime"] || lastStop["odpt:departureTime"]);
 
-                    if (nowMin < startTime - 2 || nowMin > endTime + 2) return;
+                    if (nowMin < startTime || nowMin > endTime) return;
+
+                    let direction = ""; 
+                    const firstStationId = (firstStop["odpt:departureStation"] || firstStop["odpt:arrivalStation"]).split(".").pop();
+                    const lastStationId = (lastStop["odpt:arrivalStation"] || lastStop["odpt:departureStation"]).split(".").pop();
+                    const firstIdx = getStationIndex(firstStationId);
+                    const lastIdx = getStationIndex(lastStationId);
+
+                    if (firstIdx !== -1 && lastIdx !== -1) {
+                        if (lastIdx < firstIdx) {
+                            direction = "up"; 
+                        } else {
+                            direction = "down"; 
+                        }
+                    } else {
+                        if (train["odpt:railDirection"] === "odpt.RailDirection:Outbound" || trainNum.endsWith("K")) {
+                            direction = "down";
+                        } else {
+                            direction = "up";
+                        }
+                    }
 
                     let bestTarget = null;
 
@@ -152,10 +195,9 @@
                         const stationId = (currentStop["odpt:departureStation"] || currentStop["odpt:arrivalStation"]).split(".").pop();
                         const arrTime = timeToMinutes(currentStop["odpt:arrivalTime"]);
                         const depTime = timeToMinutes(currentStop["odpt:departureTime"]);
-                        const baseTime = depTime || arrTime;
 
-                        if (baseTime && Math.abs(nowMin - baseTime) <= 1) {
-                            bestTarget = document.getElementById(`station-${stationId}`);
+                        if (arrTime && depTime && nowMin >= arrTime && nowMin <= depTime) {
+                            bestTarget = document.getElementById(`station-${stationId}-${direction}`);
                             break;
                         }
 
@@ -164,28 +206,24 @@
                             const nextArrTime = timeToMinutes(nextStop["odpt:arrivalTime"]);
                             const currentDepTime = depTime || arrTime;
 
-                            if (currentDepTime && nextArrTime && nowMin >= currentDepTime && nowMin <= nextArrTime) {
-                                bestTarget = document.getElementById(`between-${stationId}-${nextStationId}`) 
-                                          || document.getElementById(`between-${nextStationId}-${stationId}`);
+                            if (currentDepTime && nextArrTime && nowMin > currentDepTime && nowMin < nextArrTime) {
+                                bestTarget = document.getElementById(`between-${stationId}-${nextStationId}-${direction}`) 
+                                          || document.getElementById(`between-${nextStationId}-${stationId}-${direction}`);
                                 break;
                             }
                         }
                     }
 
                     if (bestTarget) {
-                        injectTrain(bestTarget, trainNum);
+                        const badge = document.createElement("div");
+                        badge.className = "train-badge";
+                        badge.innerText = trainNum;
+                        bestTarget.appendChild(badge);
                     }
                 });
             } catch (error) {
                 console.error(error);
             }
-        }
-
-        function injectTrain(target, trainNumber) {
-            const badge = document.createElement("div");
-            badge.className = "train-badge";
-            badge.innerText = trainNumber;
-            target.appendChild(badge);
         }
     </script>
 </body>
