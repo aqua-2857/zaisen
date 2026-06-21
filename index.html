@@ -18,6 +18,7 @@
             font-family: 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-color);
             color: #333;
+            overflow-x: hidden; /* 横スクロールの発生を完全に防ぐ */
         }
 
         .header { 
@@ -104,7 +105,7 @@
         }
         .menu-overlay.active { display: block; }
 
-        .screen { padding: 20px; }
+        .screen { padding: 0; } /* 左右の余白をなくして画面幅いっぱいに使う */
 
         #home-screen {
             display: flex;
@@ -112,6 +113,7 @@
             align-items: center;
             gap: 15px;
             margin-top: 50px;
+            padding: 20px;
         }
 
         .system-btn {
@@ -131,9 +133,9 @@
         #zaisen-screen {
             display: none;
             position: relative;
-            max-width: 600px;
+            width: 100%;
+            max-width: 600px; /* PC閲覧時などの最大幅 */
             margin: 0 auto;
-            padding: 0;
             background-color: var(--bg-color); 
         }
 
@@ -142,6 +144,7 @@
             display: flex;
             flex-direction: column;
             position: relative;
+            width: 100%;
         }
 
         .station-row {
@@ -152,12 +155,14 @@
             border-bottom: 1px solid #e0e0e0;
             box-sizing: border-box;
             position: relative;
+            width: 100%;
         }
 
         .between-row {
             height: var(--row-height);
             background-color: var(--bg-color); 
             position: relative;
+            width: 100%;
         }
 
         .station-name-container {
@@ -166,12 +171,17 @@
             gap: 6px;
             padding-left: 20px;
             z-index: 2;
+            max-width: 60%; /* 配線（70%位置）に被らないように制限 */
+            box-sizing: border-box;
         }
 
         .station-name {
             font-weight: bold;
             font-size: 1.1rem;
             color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .station-icon-dot {
@@ -185,9 +195,10 @@
             color: white;
             font-size: 0.65rem;
             font-weight: bold;
+            flex-shrink: 0;
         }
 
-        /* SVG配線レイヤー */
+        /* SVG配線レイヤー（完全レスポンシブ化） */
         .railway-svg-container {
             position: absolute;
             left: 0;
@@ -218,7 +229,7 @@
             transition: all 0.5s linear;
         }
 
-        /* 目立たないように透明化した分岐切り替えトリガー（配線をクリックできるように重ねる用） */
+        /* タップゾーンもレスポンシブ化 */
         .branch-clickable-zone {
             position: absolute;
             top: 0;
@@ -266,9 +277,20 @@
         let currentStations = [];   
         let timetables = { in: [], out: [] }; 
 
-        // 線の基本X位置（中央やや右：画面幅600pxに対して400pxの位置）
-        const LINE_X = 400; 
+        // 配線の描画基準X座標を動的に取得する関数（画面幅の70%＝中央やや右寄り）
+        function getLineX() {
+            const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
+            return screenWidth * 0.70;
+        }
+        
         const LINE_WIDTH = 20;
+
+        // 画面サイズが変わったら配線を再描画する
+        window.onresize = () => {
+            if (document.getElementById('zaisen-screen').style.display === 'block') {
+                renderRoute();
+            }
+        };
 
         setInterval(updateTrainPositions, 5000);
 
@@ -455,12 +477,16 @@
 
                 const stationListDiv = document.getElementById('station-list');
                 const svgLayer = document.getElementById('svg-layer');
+                const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
+                const lineX = getLineX();
+
                 stationListDiv.innerHTML = '';
                 svgLayer.innerHTML = '';
 
                 const totalHeight = currentStations.length * 160 - 80; 
                 svgLayer.setAttribute('height', totalHeight);
-                svgLayer.setAttribute('width', 600);
+                svgLayer.setAttribute('width', screenWidth);
+                svgLayer.setAttribute('viewBox', `0 0 ${screenWidth} ${totalHeight}`);
 
                 currentStations.forEach((row, index) => {
                     const stationId = row['駅ID'];
@@ -490,20 +516,19 @@
                     rowDiv.appendChild(nameContainer);
                     blockDiv.appendChild(rowDiv);
 
-                    // 駅間エリアの構築
+                    // 駅間エリア
                     if (index < currentStations.length - 1) {
                         const betweenDiv = document.createElement('div');
                         betweenDiv.className = 'between-row';
 
-                        // 分岐が存在する場合、タップ可能な不可視のエリアを配線上に設ける
                         if (row['表示先']) {
                             const clickZone = document.createElement('div');
                             clickZone.className = 'branch-clickable-zone';
-                            const isLeft = row['分岐方向'] && row['分岐方向'].endsWith('l');
+                            const branch = row['分岐方向'];
+                            const isLeft = branch && branch.endsWith('l');
                             
-                            // 配線付近をクリック可能にする
-                            clickZone.style.left = isLeft ? '0px' : `${LINE_X}px`;
-                            clickZone.style.width = isLeft ? `${LINE_X}px` : '200px';
+                            clickZone.style.left = isLeft ? '0px' : `${lineX}px`;
+                            clickZone.style.width = isLeft ? `${lineX}px` : `${screenWidth - lineX}px`;
                             
                             clickZone.onclick = () => {
                                 activeLayouts[currentSystem] = `display/${row['表示先']}.csv`;
@@ -518,25 +543,21 @@
                     // --- 配線描画ロジック ---
                     const currentY = index * 160 + 40; 
                     
-                    // 【重要ルール】n番目の駅の色設定を、n~n+1番目の駅間に適用する
                     const currentRailId = row['路線ID'];
                     const currentRailInfo = railroadMap[currentRailId];
                     const currentLineColor = currentRailInfo ? currentRailInfo['ラインカラー'] : '#999999';
-                    const targetBranchName = currentRailInfo ? currentRailInfo['路線名'] : '対象路線';
+                    const targetBranchName = currentRailInfo ? currentRailInfo['路線名'] : '';
 
-                    // 1. 本線の描画（次の駅への接続）
                     if (index < currentStations.length - 1) {
                         const nextY = (index + 1) * 160 + 40;
-                        const branch = row['分岐方向']; // il, ic, ir, ol, oc, or
+                        const branch = row['分岐方向']; 
 
-                        // 基本の本線
-                        let mainD = `M ${LINE_X} ${currentY} L ${LINE_X} ${nextY}`;
+                        let mainD = `M ${lineX} ${currentY} L ${lineX} ${nextY}`;
                         
-                        // センター末端（ic / oc）の場合は、駅間で線を途切れさせる
                         if (branch === 'ic') {
-                            mainD = `M ${LINE_X} ${currentY} L ${LINE_X} ${currentY + 60}`;
+                            mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + 60}`;
                         } else if (branch === 'oc') {
-                            mainD = `M ${LINE_X} ${currentY} L ${LINE_X} ${currentY + 100}`;
+                            mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + 100}`;
                         }
 
                         const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -546,28 +567,26 @@
                         mainPath.setAttribute('fill', 'none');
                         svgLayer.appendChild(mainPath);
 
-                        // 2. 添付イメージ通りの分岐の再現
+                        // 分岐路線の描画
                         if (branch && branch !== 'ic' && branch !== 'oc') {
                             const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                             let branchD = '';
                             let textX = 0;
                             let textY = 0;
+                            let textAnchor = "start";
 
-                            // il, ir (上り分岐：駅から斜め上に曲がって左右の端へ)
                             if (branch === 'il') {
-                                branchD = `M ${LINE_X} ${currentY} Q ${LINE_X} ${currentY - 40}, ${LINE_X - 40} ${currentY - 40} L 0 ${currentY - 40}`;
-                                textX = 120; textY = currentY - 46;
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX - 40} ${currentY - 40} L 0 ${currentY - 40}`;
+                                textX = 20; textY = currentY - 46;
                             } else if (branch === 'ir') {
-                                branchD = `M ${LINE_X} ${currentY} Q ${LINE_X} ${currentY - 40}, ${LINE_X + 40} ${currentY - 40} L 600 ${currentY - 40}`;
-                                textX = LINE_X + 40; textY = currentY - 46;
-                            } 
-                            // ol, or (下り分岐：駅から斜め下に曲がって左右の端へ)
-                            else if (branch === 'ol') {
-                                branchD = `M ${LINE_X} ${currentY} Q ${LINE_X} ${currentY + 40}, ${LINE_X - 40} ${currentY + 40} L 0 ${currentY + 40}`;
-                                textX = 120; textY = currentY + 34;
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX + 40} ${currentY - 40} L ${screenWidth} ${currentY - 40}`;
+                                textX = lineX + 30; textY = currentY - 46;
+                            } else if (branch === 'ol') {
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX - 40} ${currentY + 40} L 0 ${currentY + 40}`;
+                                textX = 20; textY = currentY + 34;
                             } else if (branch === 'or') {
-                                branchD = `M ${LINE_X} ${currentY} Q ${LINE_X} ${currentY + 40}, ${LINE_X + 40} ${currentY + 40} L 600 ${currentY + 40}`;
-                                textX = LINE_X + 40; textY = currentY + 34;
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX + 40} ${currentY + 40} L ${screenWidth} ${currentY + 40}`;
+                                textX = lineX + 30; textY = currentY + 34;
                             }
 
                             if (branchD) {
@@ -577,24 +596,26 @@
                                 branchPath.setAttribute('fill', 'none');
                                 svgLayer.appendChild(branchPath);
 
-                                // 分岐線の上に重ねる路線名テキストの描画
-                                const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                                textSvg.setAttribute('x', textX);
-                                textSvg.setAttribute('y', textY);
-                                textSvg.setAttribute('fill', '#FFFFFF');
-                                textSvg.setAttribute('font-size', '16px');
-                                textSvg.setAttribute('font-weight', 'bold');
-                                textSvg.textContent = targetBranchName;
-                                svgLayer.appendChild(textSvg);
+                                if (targetBranchName) {
+                                    const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                                    textSvg.setAttribute('x', textX);
+                                    textSvg.setAttribute('y', textY);
+                                    textSvg.setAttribute('fill', '#FFFFFF');
+                                    textSvg.setAttribute('font-size', '15px');
+                                    textSvg.setAttribute('font-weight', 'bold');
+                                    textSvg.setAttribute('text-anchor', textAnchor);
+                                    textSvg.textContent = targetBranchName;
+                                    svgLayer.appendChild(textSvg);
+                                }
                             }
                         }
                     }
 
-                    // 3. 駅の丸（黒丸）を配線の上に配置
+                    // 駅の黒丸
                     const stationDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                    stationDot.setAttribute('cx', LINE_X);
+                    stationDot.setAttribute('cx', lineX);
                     stationDot.setAttribute('cy', currentY);
-                    stationDot.setAttribute('r', '14'); // 太さ20pxの線が綺麗に隠れるサイズ
+                    stationDot.setAttribute('r', '14'); 
                     stationDot.setAttribute('fill', '#000000');
                     svgLayer.appendChild(stationDot);
                 });
@@ -623,9 +644,10 @@
 
             const nowSec = new Date().getTime() / 1000;
             const positionSlots = {};
+            const lineX = getLineX();
 
             function registerAndRenderTrain(train, yPos, direction) {
-                const baseLeft = direction === 'in' ? (LINE_X - 35) : (LINE_X + 15);
+                const baseLeft = direction === 'in' ? (lineX - 35) : (lineX + 15);
                 
                 const slotKey = `${Math.round(yPos / 20) * 20}_${direction}`;
                 if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
