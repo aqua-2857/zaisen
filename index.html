@@ -588,19 +588,19 @@
                             // 【座標調整】textYの基準位置を0.7文字分（約+11px）下げて配線の中心に配置
                             if (branch === 'il') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX - 40} ${currentY - 40} L 0 ${currentY - 40}`;
-                                textX = 20; textY = (currentY - 40) + 5; 
+                                textX = 20; textY = (currentY - 40) + 2; 
                                 zoneLeft = 0; zoneTop = currentY - 60; zoneWidth = lineX; zoneHeight = 50;
                             } else if (branch === 'ir') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX + 40} ${currentY - 40} L ${screenWidth} ${currentY - 40}`;
-                                textX = lineX + 40; textY = (currentY - 40) + 5; 
+                                textX = lineX + 40; textY = (currentY - 40) + 2; 
                                 zoneLeft = lineX; zoneTop = currentY - 60; zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             } else if (branch === 'ol') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX - 40} ${currentY + 40} L 0 ${currentY + 40}`;
-                                textX = 20; textY = (currentY + 40) + 5; 
+                                textX = 20; textY = (currentY + 40) + 2; 
                                 zoneLeft = 0; zoneTop = currentY + 15; zoneWidth = lineX; zoneHeight = 50;
                             } else if (branch === 'or') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX + 40} ${currentY + 40} L ${screenWidth} ${currentY + 40}`;
-                                textX = lineX + 40; textY = (currentY + 40) + 5; 
+                                textX = lineX + 40; textY = (currentY + 40) + 2; 
                                 zoneLeft = lineX; zoneTop = currentY + 15; zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             }
 
