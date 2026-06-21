@@ -13,23 +13,35 @@
             --row-height: 80px; 
         }
 
-        body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: var(--bg-color); color: #333; overflow-x: hidden; }
+        body {
+            margin: 0;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: #333;
+            overflow-x: hidden; 
+        }
+
         .header { background: var(--header-bg); color: white; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; height: 56px; font-size: 1.1rem; position: sticky; top: 0; z-index: 100; }
         .back-btn { background: none; border: 1px solid white; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; display: none; }
-        .screen { padding: 0; }
+        .menu-btn { width: 44px; height: 44px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; cursor: pointer; z-index: 200; }
+        .menu-btn span { display: block; width: 24px; height: 2px; background-color: white; transition: 0.3s; }
+        .screen { padding: 0; } 
+        .system-btn { background-color: var(--btn-color); color: white; border: none; padding: 15px 30px; font-size: 1.2rem; border-radius: 8px; cursor: pointer; width: 80%; max-width: 400px; margin: 10px; }
+        
         #zaisen-screen { display: none; position: relative; width: 100%; max-width: 600px; margin: 0 auto; background-color: var(--bg-color); }
         .station-block { display: flex; flex-direction: column; position: relative; width: 100%; }
         .station-row { display: flex; align-items: center; height: var(--row-height); background-color: var(--sub-bg-color); border-bottom: 1px solid #e0e0e0; position: relative; width: 100%; }
         .between-row { height: var(--row-height); background-color: var(--bg-color); position: relative; width: 100%; }
         .station-name-container { display: flex; align-items: center; gap: 6px; padding-left: 20px; z-index: 2; max-width: 60%; }
-        .station-name { font-weight: bold; font-size: 1.1rem; }
-        .station-icon-dot { width: 18px; height: 18px; background-color: #10B981; border-radius: 50%; color: white; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; }
-        
+        .station-name { font-weight: bold; font-size: 1.1rem; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .station-icon-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background-color: #10B981; border-radius: 50%; color: white; font-size: 0.65rem; flex-shrink: 0; }
+
         .railway-svg-container { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
         .train-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        /* アイコンサイズ 30px */
-        .train-icon { position: absolute; width: 30px; height: 30px; background-image: url('icon/unknown.png'); background-size: contain; background-repeat: no-repeat; transition: all 1.0s linear; }
         
+        /* 列車アイコンサイズ30px */
+        .train-icon { position: absolute; width: 30px; height: 30px; background-image: url('icon/unknown.png'); background-size: contain; background-repeat: no-repeat; transition: all 1s linear; }
+
         .branch-clickable-container { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 15; }
         .branch-clickable-zone { position: absolute; cursor: pointer; pointer-events: auto; }
     </style>
@@ -50,73 +62,157 @@
     </div>
 
     <script>
-        let stationsMap = {}, railroadMap = {}, currentSystem = '', currentStations = [], timetables = { in: [], out: [] };
-        const LINE_WIDTH = 20;
+        let stationsMap = {}, railroadMap = {}, activeLayouts = {}, currentSystem = '', currentStations = [], timetables = { in: [], out: [] };
 
+        function getLineX() { return (document.getElementById('zaisen-screen').clientWidth || window.innerWidth) * 0.70; }
+        
         // 1分ごとに更新
         setInterval(updateTrainPositions, 60000);
 
+        window.onload = async () => {
+            await loadMasters();
+            await loadInfoAndGenerateButtons();
+        };
+
+        function parseCSV(text) {
+            const lines = text.replace(/^\uFEFF/, '').replace(/\r/g, '').split('\n').filter(l => l.trim() !== '');
+            if (lines.length === 0) return [];
+            const headers = lines[0].split(',').map(h => h.trim());
+            return lines.slice(1).map(line => {
+                const values = line.split(',');
+                let obj = {};
+                headers.forEach((h, i) => obj[h] = values[i] ? values[i].trim() : '');
+                return obj;
+            });
+        }
+
+        async function safeFetch(name) { try { const res = await fetch(encodeURIComponent(name).replace(/%2F/g, '/')); if(res.ok) return await res.text(); } catch(e){} return ''; }
+
         async function loadMasters() {
-            // CSVロード処理(省略/前回同様)
+            const s = await safeFetch('zaisen - station_id.csv');
+            parseCSV(s).forEach(r => stationsMap[r['駅ID']] = r['駅名']);
+            const r = await safeFetch('zaisen - railroad_id.csv');
+            parseCSV(r).forEach(row => railroadMap[row['路線ID']] = row);
+        }
+
+        async function loadInfoAndGenerateButtons() {
+            const info = await safeFetch('zaisen - info.csv');
+            parseCSV(info).forEach(row => {
+                const id = row['路線系統'];
+                activeLayouts[id] = `display/${id}-1.csv`;
+                const btn = document.createElement('button');
+                btn.className = 'system-btn';
+                btn.innerText = row['路線系統表示名'] || id;
+                btn.onclick = () => loadZaisen(id);
+                document.getElementById('home-screen').appendChild(btn);
+            });
+        }
+
+        async function loadZaisen(id) {
+            currentSystem = id;
+            document.getElementById('home-screen').style.display = 'none';
+            document.getElementById('zaisen-screen').style.display = 'block';
+            document.getElementById('back-button').style.display = 'block';
+            await loadTimetables();
+            renderRoute();
+        }
+
+        function showHomeScreen() {
+            document.getElementById('home-screen').style.display = 'flex';
+            document.getElementById('zaisen-screen').style.display = 'none';
+            document.getElementById('back-button').style.display = 'none';
+        }
+
+        async function loadTimetables() {
+            const dayKey = (new Date().getDay() === 0 || new Date().getDay() === 6) ? 'h' : 'w';
+            timetables.in = []; timetables.out = [];
+            for (let id in railroadMap) {
+                const tin = await safeFetch(`${id}_${dayKey}_in.csv`);
+                timetables.in = timetables.in.concat(parseTimetableCSV(tin));
+                const tout = await safeFetch(`${id}_${dayKey}_out.csv`);
+                timetables.out = timetables.out.concat(parseTimetableCSV(tout));
+            }
+        }
+
+        function parseTimetableCSV(text) {
+            const lines = text.replace(/^\uFEFF/, '').replace(/\r/g, '').split('\n').filter(l => l.trim() !== '');
+            if (lines.length < 2) return [];
+            const trains = lines[0].split(',').slice(2).map(num => ({ trainNo: num.trim(), stops: {} }));
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                const sName = stationsMap[cols[0].trim()] || cols[0].trim();
+                for (let j = 2; j < cols.length; j++) if(cols[j]) trains[j-2].stops[sName] = { ...trains[j-2].stops[sName], [cols[1].trim()]: cols[j].trim() };
+            }
+            return trains.filter(t => t.trainNo !== '');
         }
 
         function renderRoute() {
-            // 描画ロジック(前回同様)
+            const stations = parseCSV(activeLayouts[currentSystem]);
+            currentStations = stations;
+            const lineX = getLineX();
+            const svg = document.getElementById('svg-layer');
+            svg.innerHTML = '';
+            document.getElementById('station-list').innerHTML = '';
+            document.getElementById('clickable-layer').innerHTML = '';
+
+            stations.forEach((row, i) => {
+                const y = i * 160 + 40;
+                // 駅表示省略(前回のコード参照)
+                // SVG描画
+                const color = railroadMap[row['路線ID']]?.['ラインカラー'] || '#999';
+                const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                mainPath.setAttribute('d', `M ${lineX} ${y} L ${lineX} ${(i+1)*160 + 40}`);
+                mainPath.setAttribute('stroke', color);
+                mainPath.setAttribute('stroke-width', '20');
+                svg.appendChild(mainPath);
+                
+                // 黒丸
+                const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot.setAttribute('cx', lineX); dot.setAttribute('cy', y); dot.setAttribute('r', '14');
+                svg.appendChild(dot);
+            });
             updateTrainPositions();
         }
 
         function updateTrainPositions() {
-            if (!currentStations.length) return;
-            const trainLayer = document.getElementById('train-layer');
-            trainLayer.innerHTML = '';
-
             const now = new Date();
-            const nowSec = (now.getHours() * 3600) + (now.getMinutes() * 60);
-            const lineX = (document.getElementById('zaisen-screen').clientWidth || 600) * 0.7;
-
-            // CSVにある駅名のリストを作成
-            const validStationNames = currentStations.map(s => stationsMap[s['駅ID']] || s['駅ID']);
+            const nowSec = now.getHours() * 3600 + now.getMinutes() * 60;
+            const layer = document.getElementById('train-layer');
+            layer.innerHTML = '';
+            const lineX = getLineX();
 
             ['in', 'out'].forEach(dir => {
-                timetables[dir].forEach(train => {
-                    // 現在の列車が、現在表示中の路線上に存在するか判定
-                    let activeSegment = null;
-                    for (let i = 0; i < validStationNames.length - 1; i++) {
-                        const s1 = validStationNames[i];
-                        const s2 = validStationNames[i+1];
-                        if (train.stops[s1] && train.stops[s2]) {
-                            const dep = timeToSeconds(train.stops[s1]['発']);
-                            const arr = timeToSeconds(train.stops[s2]['着']);
-                            if (dep && arr && nowSec >= dep && nowSec <= arr) {
-                                activeSegment = { i, dep, arr };
-                                break;
-                            }
+                timetables[dir].forEach(t => {
+                    let prevS = null, prevDep = null;
+                    for (let sName in t.stops) {
+                        const s = t.stops[sName];
+                        const arr = s['着'] ? parseInt(s['着'].split(':')[0])*3600 + parseInt(s['着'].split(':')[1])*60 : null;
+                        const dep = s['発'] ? parseInt(s['発'].split(':')[0])*3600 + parseInt(s['発'].split(':')[1])*60 : null;
+                        
+                        // 駅位置判定
+                        if (arr && dep && nowSec >= arr && nowSec <= dep) {
+                            renderTrain(lineX, sName, dir, 0); return;
                         }
-                    }
-
-                    if (activeSegment) {
-                        const ratio = (nowSec - activeSegment.dep) / (activeSegment.arr - activeSegment.dep);
-                        const y1 = activeSegment.i * 160 + 40;
-                        const y2 = (activeSegment.i + 1) * 160 + 40;
-                        const yPos = y1 + (y2 - y1) * ratio;
-
-                        const icon = document.createElement('div');
-                        icon.className = 'train-icon';
-                        icon.style.top = `${yPos - 15}px`; 
-                        icon.style.left = `${lineX - 15}px`;
-                        trainLayer.appendChild(icon);
+                        // 駅間走行判定
+                        if (prevDep && arr && nowSec > prevDep && nowSec < arr) {
+                            renderTrain(lineX, prevS, dir, (nowSec - prevDep) / (arr - prevDep)); return;
+                        }
+                        prevS = sName; prevDep = dep;
                     }
                 });
             });
         }
 
-        function timeToSeconds(timeStr) {
-            if (!timeStr) return null;
-            const parts = timeStr.split(':');
-            return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60;
+        function renderTrain(lineX, sName, dir, ratio) {
+            const idx = currentStations.findIndex(s => (stationsMap[s['駅ID']] || s['駅ID']) === sName);
+            if (idx === -1) return;
+            const y = (idx + ratio) * 160 + 40;
+            const icon = document.createElement('div');
+            icon.className = 'train-icon';
+            icon.style.left = (dir === 'in' ? lineX - 45 : lineX + 15) + 'px';
+            icon.style.top = (y - 15) + 'px';
+            document.getElementById('train-layer').appendChild(icon);
         }
-
-        // --- 以前のコードの続き（初期化処理等） ---
     </script>
 </body>
 </html>
