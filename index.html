@@ -189,16 +189,22 @@
             document.getElementById('current-time').innerText = now.toLocaleTimeString('ja-JP');
         }
 
-        // CSV解析
+        // ★強化版 CSV解析関数 (BOMや余分な空白、改行コードを完全に除去)
         function parseCSV(text) {
-            const lines = text.split(/\r?\n/);
-            if (lines.length === 0) return [];
-            const headers = lines[0].split(',');
+            // 見えないBOM文字（\ufeff）を削除
+            const cleanText = text.replace(/^\uFEFF/, '');
+            const lines = cleanText.split(/\r?\n/);
+            if (lines.length === 0 || !lines[0].trim()) return [];
+            
+            // ヘッダーの左右の空白を完全に消去
+            const headers = lines[0].split(',').map(h => h.trim());
+            
             return lines.slice(1).filter(line => line.trim() !== '').map(line => {
                 const values = line.split(',');
                 const obj = {};
                 headers.forEach((header, index) => {
-                    obj[header.trim()] = values[index] ? values[index].trim() : '';
+                    // データ側の左右の空白も完全に消去
+                    obj[header] = values[index] ? values[index].trim() : '';
                 });
                 return obj;
             });
@@ -235,18 +241,22 @@
 
                 infoData.forEach(row => {
                     const sysId = row['路線系統'];
-                    const sysName = row['路線系統表示名']; // 新しい列名に対応
-                    systemNameMap[sysId] = sysName;
+                    const sysName = row['路線系統表示名']; 
+
+                    // 万が一パースエラーが起きても安全なようにフォールバックを用意
+                    if (!sysId) return;
+
+                    systemNameMap[sysId] = sysName || sysId;
 
                     // デフォルトのディスプレイファイル名を「路線系統-1.csv」にする
                     if (!activeLayouts[sysId]) {
                         activeLayouts[sysId] = `${sysId}-1.csv`; 
                     }
 
-                    // ボタン要素作成（路線系統表示名を使う）
+                    // ボタン要素作成
                     const btn = document.createElement('button');
                     btn.className = 'system-btn';
-                    btn.innerText = sysName;
+                    btn.innerText = systemNameMap[sysId];
                     btn.onclick = () => loadZaisen(sysId);
                     homeScreen.appendChild(btn);
                 });
@@ -259,7 +269,6 @@
         async function loadZaisen(systemId) {
             currentSystem = systemId;
             
-            // ヘッダーを「路線系統表示名」に変更
             document.getElementById('header-title').innerText = systemNameMap[systemId] || "位置情報";
             document.getElementById('home-screen').style.display = 'none';
             document.getElementById('zaisen-screen').style.display = 'block';
@@ -298,14 +307,15 @@
 
         // 時刻表CSV解析
         function parseTimetableCSV(text) {
-            const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+            const cleanText = text.replace(/^\uFEFF/, '');
+            const lines = cleanText.split(/\r?\n/).filter(l => l.trim() !== '');
             if (lines.length < 2) return [];
             
-            const trainNumbers = lines[0].split(',').slice(2);
+            const trainNumbers = lines[0].split(',').map(t => t.trim()).slice(2);
             const trains = trainNumbers.map(num => ({ trainNo: num, stops: {} }));
 
             for (let i = 1; i < lines.length; i++) {
-                const cols = lines[i].split(',');
+                const cols = lines[i].split(',').map(c => c.trim());
                 const stationName = cols[0];
                 const type = cols[1];
                 
@@ -324,7 +334,6 @@
 
         // 5. 路線・駅図面のレンダリング
         async function renderRoute() {
-            // 現在保持されているディスプレイファイル名（例: saikyo-1.csv）を取得
             const layoutFile = activeLayouts[currentSystem];
             const resLayout = await fetch(layoutFile);
             const textLayout = await resLayout.text();
@@ -339,33 +348,28 @@
                 const stationId = row['駅ID'];
                 const stationName = stationsMap[stationId] || stationId;
 
-                // 駅エリアの作成
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'station-row';
                 rowDiv.id = `station-row-${stationId}`;
 
-                // 駅名表示（画面左側）
                 const nameDiv = document.createElement('div');
                 nameDiv.className = 'station-name';
                 nameDiv.innerText = stationName;
                 rowDiv.appendChild(nameDiv);
 
-                // 分岐・切り替え先ボタンの設定
                 if (row['表示先']) {
                     const btn = document.createElement('button');
                     btn.className = 'branch-trigger';
                     btn.innerText = row['分岐方向'] === 'ir' ? '→ 相鉄直通線' : '← りんかい線';
                     btn.onclick = () => {
-                        // 新しい切り替え先のファイル名（例: saikyo-2.csv）を状態に保持
                         activeLayouts[currentSystem] = `${row['表示先']}.csv`;
-                        renderRoute(); // 再描画
+                        renderRoute(); 
                     };
                     rowDiv.appendChild(btn);
                 }
 
                 stationListDiv.appendChild(rowDiv);
 
-                // 20pxの縦線の描画
                 if (index < currentStations.length - 1) {
                     const segment = document.createElement('div');
                     segment.className = 'railway-line-segment';
@@ -381,7 +385,7 @@
             updateTrainPositions();
         }
 
-        // 時間計算用（hhmm -> シリアル秒）
+        // 時間計算用
         function timeToSeconds(timeStr) {
             if (!timeStr) return null;
             const clean = timeStr.replace(':', '');
@@ -392,7 +396,7 @@
             return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0).getTime() / 1000;
         }
 
-        // 6. 列車位置のリアルタイム計算とマッピング
+        // 6. 列車位置のリアルタイム計算
         function updateTrainPositions() {
             if (!currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
@@ -406,7 +410,7 @@
                 const slotKey = `${Math.round(yPos)}_${direction}`;
                 
                 if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
-                const offset = positionSlots[slotKey] * 30; // 被り時に横へずらす
+                const offset = positionSlots[slotKey] * 30; 
                 positionSlots[slotKey]++;
 
                 const icon = document.createElement('div');
@@ -428,16 +432,14 @@
                         if (!stopInfo) continue;
 
                         const arrSec = timeToSeconds(stopInfo['着']);
-                        const depSec = timeToSeconds(stopInfo['发'] || stopInfo['発']);
+                        const depSec = timeToSeconds(stopInfo['発'] || stopInfo['发']);
 
-                        // 駅停車中
                         if (arrSec && depSec && nowSec >= arrSec && nowSec <= depSec) {
                             const yPos = (i * 83) + 28;
                             registerAndRenderTrain(train, yPos, dir);
                             return;
                         }
 
-                        // 駅間走行中
                         if (i < currentStations.length - 1) {
                             const nextStId = currentStations[i+1]['駅ID'];
                             const nextStName = stationsMap[nextStId];
