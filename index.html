@@ -227,7 +227,6 @@
             transition: all 0.5s linear;
         }
 
-        /* 完全に絶対配置化された分岐タップゾーン */
         .branch-clickable-container {
             position: absolute;
             left: 0;
@@ -241,7 +240,7 @@
             position: absolute;
             cursor: pointer;
             pointer-events: auto;
-            background-color: rgba(0, 122, 255, 0.0); /* デバッグ時は 0.2 などにすると範囲が見えます */
+            background-color: rgba(0, 122, 255, 0.0); 
             transition: background-color 0.2s;
         }
         .branch-clickable-zone:active {
@@ -380,18 +379,20 @@
             }
         }
 
-        // 路線名または路線IDからラインカラーを割り出す関数
-        function getLineColorByNameOrId(nameOrId) {
-            if (!nameOrId) return '#999999';
-            if (railroadMap[nameOrId]) return railroadMap[nameOrId]['ラインカラー'];
-            
-            // 路線名で探す
-            for (let id in railroadMap) {
-                if (railroadMap[id]['路線名'] === nameOrId) {
-                    return railroadMap[id]['ラインカラー'];
-                }
+        // 路線IDからラインカラーを安全に引き出す関数
+        function getLineColorById(routeId) {
+            if (routeId && railroadMap[routeId]) {
+                return railroadMap[routeId]['ラインカラー'];
             }
             return '#999999';
+        }
+
+        // 路線IDから路線名を表示用に引き出す関数
+        function getRouteNameById(routeId) {
+            if (routeId && railroadMap[routeId]) {
+                return railroadMap[routeId]['路線名'];
+            }
+            return routeId || ''; // 見つからなければIDをそのまま返す
         }
 
         async function loadInfoAndGenerateButtons() {
@@ -552,17 +553,18 @@
                     const currentY = index * 160 + 40; 
                     
                     const currentRailId = row['路線ID'];
-                    const currentLineColor = getLineColorByNameOrId(currentRailId);
+                    const currentLineColor = getLineColorById(currentRailId);
                     
-                    // 「分岐路線」列から直接名前を引っ張る
-                    const targetBranchName = row['分岐路線'] || '';
-                    const branchLineColor = getLineColorByNameOrId(targetBranchName);
+                    // 【修正】「分岐路線」列（路線ID）をマスタ引きして正しい路線名とカラーを取得
+                    const branchRouteId = row['分岐路線'] || '';
+                    const targetBranchName = getRouteNameById(branchRouteId);
+                    const branchLineColor = getLineColorById(branchRouteId);
 
                     if (index < currentStations.length - 1) {
                         const nextY = (index + 1) * 160 + 40;
                         const branch = row['分岐方向']; 
 
-                        let mainD = `M ${lineX} ${currentY} L ${lineX} ${nextY}`;
+                        let mainD = `M ${lineX} ${nextY} L ${lineX} ${currentY}`;
                         
                         if (branch === 'ic' || branch === 'oc') {
                             mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + 80}`;
@@ -575,44 +577,40 @@
                         mainPath.setAttribute('fill', 'none');
                         svgLayer.appendChild(mainPath);
 
-                        // 分岐が存在する場合の処理
                         if (branch && branch !== 'ic' && branch !== 'oc') {
                             const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                             let branchD = '';
                             let textX = 0;
                             let textY = 0;
-                            let textAnchor = "start";
 
-                            // 絶対配置用タップゾーンの計算用変数
                             let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = 40;
 
+                            // 【座標調整】textYの基準位置を0.7文字分（約+11px）下げて配線の中心に配置
                             if (branch === 'il') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX - 40} ${currentY - 40} L 0 ${currentY - 40}`;
-                                textX = 20; textY = currentY - 48;
+                                textX = 20; textY = (currentY - 40) + 5; 
                                 zoneLeft = 0; zoneTop = currentY - 60; zoneWidth = lineX; zoneHeight = 50;
                             } else if (branch === 'ir') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX + 40} ${currentY - 40} L ${screenWidth} ${currentY - 40}`;
-                                textX = lineX + 40; textY = currentY - 48;
+                                textX = lineX + 40; textY = (currentY - 40) + 5; 
                                 zoneLeft = lineX; zoneTop = currentY - 60; zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             } else if (branch === 'ol') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX - 40} ${currentY + 40} L 0 ${currentY + 40}`;
-                                textX = 20; textY = currentY + 32;
+                                textX = 20; textY = (currentY + 40) + 5; 
                                 zoneLeft = 0; zoneTop = currentY + 15; zoneWidth = lineX; zoneHeight = 50;
                             } else if (branch === 'or') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX + 40} ${currentY + 40} L ${screenWidth} ${currentY + 40}`;
-                                textX = lineX + 40; textY = currentY + 32;
+                                textX = lineX + 40; textY = (currentY + 40) + 5; 
                                 zoneLeft = lineX; zoneTop = currentY + 15; zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             }
 
                             if (branchD) {
-                                // 固有の分岐路線カラーで線を描画
                                 branchPath.setAttribute('d', branchD);
                                 branchPath.setAttribute('stroke', branchLineColor);
                                 branchPath.setAttribute('stroke-width', LINE_WIDTH);
                                 branchPath.setAttribute('fill', 'none');
                                 svgLayer.appendChild(branchPath);
 
-                                // 分岐路線テキストの描画
                                 if (targetBranchName) {
                                     const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                                     textSvg.setAttribute('x', textX);
@@ -620,12 +618,11 @@
                                     textSvg.setAttribute('fill', '#FFFFFF');
                                     textSvg.setAttribute('font-size', '14px');
                                     textSvg.setAttribute('font-weight', 'bold');
-                                    textSvg.setAttribute('text-anchor', textAnchor);
+                                    textSvg.setAttribute('dominant-baseline', 'central'); // 垂直方向の軸を中央に固定
                                     textSvg.textContent = targetBranchName;
                                     svgLayer.appendChild(textSvg);
                                 }
 
-                                // 正確な座標に重なる当たり判定（クリックゾーン）の生成
                                 if (row['表示先']) {
                                     const clickZone = document.createElement('div');
                                     clickZone.className = 'branch-clickable-zone';
@@ -645,7 +642,6 @@
                         }
                     }
 
-                    // 駅の黒丸
                     const stationDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     stationDot.setAttribute('cx', lineX);
                     stationDot.setAttribute('cy', currentY);
