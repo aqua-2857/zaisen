@@ -64,7 +64,6 @@
             transition: 0.3s;
         }
 
-        /* メニューが開いているときのボタンアニメーション */
         .menu-btn.active span:nth-child(1) {
             transform: translateY(7px) rotate(45deg);
         }
@@ -104,7 +103,7 @@
             background: #444;
         }
 
-        /* オーバーレイ（背景の影） */
+        /* オーバーレイ */
         .menu-overlay {
             position: fixed;
             top: 0;
@@ -229,7 +228,7 @@
         <div id="last-update" class="nav-menu-item" style="cursor: default; background: none; color: #ccc; font-size: 0.9rem;">
             最終更新：取得中...
         </div>
-        <div class="nav-menu-item" onclick="pageReload()">🔄 リロード</div>
+        <div class="nav-menu-item" onclick="pageReload()">リロード</div>
     </div>
     <div id="menu-overlay" class="menu-overlay" onclick="toggleMenu()"></div>
 
@@ -254,7 +253,7 @@
         setInterval(updateTrainPositions, 5000);
 
         window.onload = async () => {
-            await fetchGitHubCommits(); // GitHub APIからコミット日時を取得
+            await fetchGitHubCommits();
             await initApp();
         };
 
@@ -264,17 +263,13 @@
             document.getElementById('menu-overlay').classList.toggle('active');
         }
 
-        // 完全にF5と同じ挙動のリロード
         function pageReload() {
             location.reload();
         }
 
-        // GitHub API を使用して、リポジトリの最新コミット日時を取得する関数
         async function fetchGitHubCommits() {
             const updateEl = document.getElementById('last-update');
             try {
-                // GitHub PagesのURLからユーザー名とリポジトリ名を取得
-                // 例: https://username.github.io/repo-name/ -> username, repo-name
                 const pathParts = window.location.pathname.split('/').filter(p => p !== '');
                 const hostParts = window.location.hostname.split('.');
                 
@@ -293,7 +288,6 @@
                         }
                     }
                 }
-                // フォールバック（APIが使えない、またはローカル環境などの場合）
                 const response = await fetch(window.location.href, { method: 'HEAD' });
                 const lastMod = response.headers.get('Last-Modified');
                 if (lastMod) {
@@ -311,13 +305,11 @@
             await loadInfoAndGenerateButtons();
         }
 
-        // 安全性を高めたCSVパーサー（列名に予期せぬ文字やBOMが含まれても弾かれない仕様）
         function parseCSV(text) {
             const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
             const lines = cleanText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
             
-            // ヘッダーの各列から見えない空白や改行を完全に除去
             const headers = lines[0].split(',').map(h => h.trim().replace(/[\u200B-\u200D\uFEFF]/g, ''));
             
             return lines.slice(1).map(line => {
@@ -332,7 +324,6 @@
             });
         }
 
-        // ファイル名の有無（zaisen - のプレフィックス）に左右されない自動フォールバック
         async function safeFetch(baseName) {
             const namesToTry = [baseName];
             if (baseName.startsWith('zaisen - ')) {
@@ -349,7 +340,7 @@
                         return await res.text();
                     }
                 } catch (e) {
-                    // 次の候補を試す
+                    // ignore
                 }
             }
             throw new Error(`ファイルが見つかりません: ${baseName}`);
@@ -388,7 +379,6 @@
 
                 infoData.forEach(row => {
                     const keys = Object.keys(row);
-                    // より柔軟に列名を特定できるように部分一致で判定
                     const sysIdKey = keys.find(k => k.includes('路線系統') && !k.includes('名') && !k.includes('表示'));
                     const sysNameKey = keys.find(k => k.includes('路線系統') && (k.includes('名') || k.includes('表示')));
 
@@ -494,7 +484,7 @@
                     const idKey = keys.find(k => k.includes('駅ID'));
                     const railIdKey = keys.find(k => k.includes('路線ID'));
                     
-                    if (!idKey) return;
+                    if (!idKey || !row[idKey]) return; // 有効な駅IDがない行はスキップ
                     
                     const stationId = row[idKey];
                     const stationName = stationsMap[stationId] || stationId;
@@ -521,7 +511,7 @@
 
                     stationListDiv.appendChild(rowDiv);
 
-                    if (index < currentStations.length - 1 && railIdKey) {
+                    if (index < currentStations.length - 1 && railIdKey && row[railIdKey]) {
                         const segment = document.createElement('div');
                         segment.className = 'railway-line-segment';
                         segment.style.top = `${(index * 83) + 40}px`;
@@ -550,8 +540,9 @@
         }
 
         function updateTrainPositions() {
-            if (!currentStations.length) return;
+            if (!currentStations || !currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
+            if (!trainLayer) return;
             trainLayer.innerHTML = '';
 
             const nowSec = new Date().getTime() / 1000;
@@ -578,13 +569,16 @@
                 list.forEach(train => {
                     for (let i = 0; i < currentStations.length; i++) {
                         const keys = currentStations[i];
+                        if (!keys) continue;
+                        
                         const idKey = Object.keys(keys).find(k => k.includes('駅ID'));
-                        if (!idKey) continue;
+                        if (!idKey || !keys[idKey]) continue;
 
                         const stId = keys[idKey];
                         const stName = stationsMap[stId];
+                        if (!stName) continue;
+                        
                         const stopInfo = train.stops[stName];
-
                         if (!stopInfo) continue;
 
                         const arrSec = timeToSeconds(stopInfo['着']);
@@ -598,11 +592,15 @@
 
                         if (i < currentStations.length - 1) {
                             const nextKeys = currentStations[i+1];
+                            if (!nextKeys) continue;
+                            
                             const nextIdKey = Object.keys(nextKeys).find(k => k.includes('駅ID'));
-                            if (!nextIdKey) continue;
+                            if (!nextIdKey || !nextKeys[nextIdKey]) continue;
 
                             const nextStId = nextKeys[nextIdKey];
                             const nextStName = stationsMap[nextStId];
+                            if (!nextStName) continue;
+                            
                             const nextStopInfo = train.stops[nextStName];
 
                             if (nextStopInfo && depSec) {
