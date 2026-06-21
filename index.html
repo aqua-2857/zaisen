@@ -178,7 +178,6 @@
             document.getElementById('current-time').innerText = now.toLocaleTimeString('ja-JP');
         }
 
-        // CSV解析（BOM、改行、空白を徹底排除）
         function parseCSV(text) {
             const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
             const lines = cleanText.split('\n').filter(line => line.trim() !== '');
@@ -196,13 +195,11 @@
             });
         }
 
-        // GitHub Pagesの404対策付きfetch関数
         async function safeFetch(fileName) {
-            // 安全のためスペースをエンコード（"zaisen - info.csv" -> "zaisen%20-%20info.csv"）
             const encodedName = encodeURIComponent(fileName).replace(/%2F/g, '/');
             const res = await fetch(encodedName);
             if (!res.ok) {
-                throw new Error(`HTTPエラー! ステータス: ${res.status} (ファイルが見つからないか名前が違います: ${fileName})`);
+                throw new Error(`HTTPエラー! ステータス: ${res.status} (ファイルが見つかりません: ${fileName})`);
             }
             return await res.text();
         }
@@ -243,9 +240,8 @@
 
                     systemNameMap[sysId] = sysName;
 
-                    // ここで設定するデフォルトのファイル名をGitHub上の実態に合わせる
-                    // もしGitHub上で「zaisen - saikyo-1.csv」ならここを `zaisen - ${sysId}-1.csv` にしてください
-                    activeLayouts[sysId] = `${sysId}-1.csv`; 
+                    // GitHub上の「zaisen - saikyo-1.csv」に合わせるため、最初から「zaisen - 」を付与
+                    activeLayouts[sysId] = `zaisen - ${sysId}-1.csv`; 
 
                     const btn = document.createElement('button');
                     btn.className = 'system-btn';
@@ -319,24 +315,11 @@
         }
 
         async function renderRoute() {
-            let layoutFile = activeLayouts[currentSystem];
+            const layoutFile = activeLayouts[currentSystem];
             if (!layoutFile) return;
 
             try {
-                let textLayout;
-                try {
-                    textLayout = await safeFetch(layoutFile);
-                } catch(err) {
-                    // もし「saikyo-1.csv」で404になった場合、自動的に「zaisen - saikyo-1.csv」でもう一度探す超安全仕様
-                    if(!layoutFile.startsWith('zaisen - ')) {
-                        layoutFile = `zaisen - ${layoutFile}`;
-                        textLayout = await safeFetch(layoutFile);
-                        activeLayouts[currentSystem] = layoutFile;
-                    } else {
-                        throw err;
-                    }
-                }
-
+                const textLayout = await safeFetch(layoutFile);
                 currentStations = parseCSV(textLayout);
 
                 const stationListDiv = document.getElementById('station-list');
@@ -362,7 +345,8 @@
                         btn.className = 'branch-trigger';
                         btn.innerText = row['分岐方向'] === 'ir' ? '→ 相鉄直通線' : '← りんかい線';
                         btn.onclick = () => {
-                            activeLayouts[currentSystem] = `${row['表示先']}.csv`;
+                            // 分岐先のファイル名もGitHubの規則（zaisen - xxx）に合わせる
+                            activeLayouts[currentSystem] = `zaisen - ${row['表示先']}.csv`;
                             renderRoute(); 
                         };
                         rowDiv.appendChild(btn);
@@ -384,7 +368,7 @@
 
                 updateTrainPositions();
             } catch(e) {
-                console.error("レイアウトファイルの読み込みに完全に失敗しました:", e.message);
+                console.error("レイアウトファイルの読み込みに失敗しました:", e.message);
             }
         }
 
