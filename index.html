@@ -19,7 +19,6 @@
             color: #333;
         }
 
-        /* ヘッダー */
         .header { 
             background: var(--header-bg);
             color: white; 
@@ -45,7 +44,6 @@
             display: none;
         }
 
-        /* スクリーン管理 */
         .screen {
             padding: 20px;
         }
@@ -75,7 +73,6 @@
             opacity: 0.9;
         }
 
-        /* 位置情報画面レイアウト */
         #zaisen-screen {
             display: none;
             position: relative;
@@ -181,73 +178,75 @@
             document.getElementById('current-time').innerText = now.toLocaleTimeString('ja-JP');
         }
 
-        // CSVパース関数（BOM対策と余計な文字排除を徹底）
+        // CSV解析（BOM、改行、空白を徹底排除）
         function parseCSV(text) {
-            // UTF-8のBOM(\ufeff)を削除
-            const cleanText = text.replace(/^\uFEFF/, '');
-            const lines = cleanText.split(/\r?\n/).filter(line => line.trim() !== '');
+            const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
+            const lines = cleanText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
             
-            // ヘッダー行の各カラムの前後空白と\rを完全に除去
-            const headers = lines[0].split(',').map(h => h.replace(/[\r\n]/g, '').trim());
+            const headers = lines[0].split(',').map(h => h.trim());
             
             return lines.slice(1).map(line => {
                 const values = line.split(',');
                 const obj = {};
                 headers.forEach((header, index) => {
-                    obj[header] = values[index] ? values[index].replace(/[\r\n]/g, '').trim() : '';
+                    obj[header] = values[index] ? values[index].trim() : '';
                 });
                 return obj;
             });
         }
 
-        // 1. マスタデータの読み込み
+        // GitHub Pagesの404対策付きfetch関数
+        async function safeFetch(fileName) {
+            // 安全のためスペースをエンコード（"zaisen - info.csv" -> "zaisen%20-%20info.csv"）
+            const encodedName = encodeURIComponent(fileName).replace(/%2F/g, '/');
+            const res = await fetch(encodedName);
+            if (!res.ok) {
+                throw new Error(`HTTPエラー! ステータス: ${res.status} (ファイルが見つからないか名前が違います: ${fileName})`);
+            }
+            return await res.text();
+        }
+
         async function loadMasters() {
             try {
-                const resStation = await fetch('zaisen - station_id.csv');
-                const textStation = await resStation.text();
+                const textStation = await safeFetch('zaisen - station_id.csv');
                 parseCSV(textStation).forEach(row => {
                     stationsMap[row['駅ID']] = row['駅名'];
                 });
 
-                const resRail = await fetch('zaisen - railroad_id.csv');
-                const textRail = await resRail.text();
+                const textRail = await safeFetch('zaisen - railroad_id.csv');
                 parseCSV(textRail).forEach(row => {
                     railroadMap[row['路線ID']] = row;
                 });
             } catch (e) {
-                console.error("マスタデータの読み込みに失敗しました", e);
+                console.error("マスタデータの読み込みに失敗:", e.message);
             }
         }
 
-        // 2. info.csv の読み込みとボタン生成（キー自動検知型に強化）
         async function loadInfoAndGenerateButtons() {
             try {
-                const resInfo = await fetch('zaisen - info.csv');
-                const textInfo = await resInfo.text();
+                const textInfo = await safeFetch('zaisen - info.csv');
                 const infoData = parseCSV(textInfo);
 
                 const homeScreen = document.getElementById('home-screen');
                 homeScreen.innerHTML = '';
 
                 infoData.forEach(row => {
-                    // キー名に部分一致するものを柔軟に探す（路線系統、路線系統表示名 等）
                     const keys = Object.keys(row);
                     const sysIdKey = keys.find(k => k.includes('路線系統') && !k.includes('名'));
                     const sysNameKey = keys.find(k => k.includes('路線系統') && k.includes('名'));
 
                     const sysId = row[sysIdKey];
-                    const sysName = row[sysNameKey] || sysId; 
+                    const sysName = row[sysNameKey] || sysId;
 
-                    if (!sysId) return; // 空欄データはスキップ
+                    if (!sysId) return;
 
                     systemNameMap[sysId] = sysName;
 
-                    if (!activeLayouts[sysId]) {
-                        activeLayouts[sysId] = `${sysId}-1.csv`; 
-                    }
+                    // ここで設定するデフォルトのファイル名をGitHub上の実態に合わせる
+                    // もしGitHub上で「zaisen - saikyo-1.csv」ならここを `zaisen - ${sysId}-1.csv` にしてください
+                    activeLayouts[sysId] = `${sysId}-1.csv`; 
 
-                    // ボタン生成
                     const btn = document.createElement('button');
                     btn.className = 'system-btn';
                     btn.innerText = sysName;
@@ -255,14 +254,12 @@
                     homeScreen.appendChild(btn);
                 });
             } catch (e) {
-                console.error("info.csvの読み込みに失敗しました", e);
+                console.error("info.csvの読み込みに失敗:", e.message);
             }
         }
 
-        // 3. 位置情報画面への遷移
         async function loadZaisen(systemId) {
             currentSystem = systemId;
-            
             document.getElementById('header-title').innerText = systemNameMap[systemId] || "位置情報";
             document.getElementById('home-screen').style.display = 'none';
             document.getElementById('zaisen-screen').style.display = 'block';
@@ -272,7 +269,6 @@
             await renderRoute();
         }
 
-        // 4. ホーム画面に戻る
         function showHomeScreen() {
             document.getElementById('header-title').innerText = "ホーム";
             document.getElementById('home-screen').style.display = 'flex';
@@ -280,27 +276,25 @@
             document.getElementById('back-button').style.display = 'none';
         }
 
-        // 時刻表の取得
         async function loadTimetables() {
             const now = new Date();
             const isHoliday = (now.getDay() === 0 || now.getDay() === 6);
             const dayKey = isHoliday ? 'h' : 'w';
 
             try {
-                const resIn = await fetch(`jreja_${dayKey}_in.csv`);
-                const textIn = await resIn.text();
+                const textIn = await safeFetch(`jreja_${dayKey}_in.csv`);
                 timetables.in = parseTimetableCSV(textIn);
 
-                const resOut = await fetch(`jreja_${dayKey}_out.csv`);
-                const textOut = await resOut.text();
+                const textOut = await safeFetch(`jreja_${dayKey}_out.csv`);
                 timetables.out = parseTimetableCSV(textOut);
             } catch (e) {
-                console.warn("時刻表ファイルが一部見つかりません。");
+                console.warn("時刻表ファイルが一部見つかりません:", e.message);
             }
         }
 
         function parseTimetableCSV(text) {
-            const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+            const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
+            const lines = cleanText.split('\n').filter(l => l.trim() !== '');
             if (lines.length < 2) return [];
             
             const trainNumbers = lines[0].split(',').slice(2);
@@ -324,14 +318,25 @@
             return trains.filter(t => t.trainNo !== '');
         }
 
-        // 5. 路線・駅図面のレンダリング
         async function renderRoute() {
-            const layoutFile = activeLayouts[currentSystem];
+            let layoutFile = activeLayouts[currentSystem];
             if (!layoutFile) return;
 
             try {
-                const resLayout = await fetch(layoutFile);
-                const textLayout = await resLayout.text();
+                let textLayout;
+                try {
+                    textLayout = await safeFetch(layoutFile);
+                } catch(err) {
+                    // もし「saikyo-1.csv」で404になった場合、自動的に「zaisen - saikyo-1.csv」でもう一度探す超安全仕様
+                    if(!layoutFile.startsWith('zaisen - ')) {
+                        layoutFile = `zaisen - ${layoutFile}`;
+                        textLayout = await safeFetch(layoutFile);
+                        activeLayouts[currentSystem] = layoutFile;
+                    } else {
+                        throw err;
+                    }
+                }
+
                 currentStations = parseCSV(textLayout);
 
                 const stationListDiv = document.getElementById('station-list');
@@ -379,7 +384,7 @@
 
                 updateTrainPositions();
             } catch(e) {
-                console.error(`${layoutFile} の読み込みに失敗しました。`, e);
+                console.error("レイアウトファイルの読み込みに完全に失敗しました:", e.message);
             }
         }
 
