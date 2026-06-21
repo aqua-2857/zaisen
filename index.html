@@ -1,20 +1,22 @@
 <style>
-    /* 列車アイコンサイズをエリアの半分の高さ(40px)へ調整 */
+    /* 列車アイコンを30pxに */
     .train-icon {
         position: absolute;
-        width: 40px; 
-        height: 40px;
+        width: 30px;
+        height: 30px;
         background-image: url('icon/unknown.png');
         background-size: contain;
         background-repeat: no-repeat;
         transition: all 0.5s linear;
-        transform: translate(-50%, -50%); /* アイコンの中心が座標にくるように */
+        z-index: 10;
     }
 </style>
 
 <script>
-    // ... 前半は変更なし ...
+    // 60秒ごとに更新
+    setInterval(updateTrainPositions, 60000);
 
+    // 更新ロジックの修正
     function updateTrainPositions() {
         if (!currentStations || !currentStations.length) return;
         const trainLayer = document.getElementById('train-layer');
@@ -22,67 +24,54 @@
         trainLayer.innerHTML = '';
 
         const nowSec = new Date().getTime() / 1000;
+        const positionSlots = {};
         const lineX = getLineX();
 
-        // 現在表示されている駅名のリストを作成（これに含まれないエリアの列車は表示しない）
+        // 現在表示中の駅リスト（範囲外フィルタリング用）
         const visibleStationNames = currentStations.map(s => stationsMap[s['駅ID']] || s['駅ID']);
 
         function registerAndRenderTrain(train, yPos, direction) {
+            const baseLeft = direction === 'in' ? (lineX - 38) : (lineX + 8);
+            const slotKey = `${Math.round(yPos / 30) * 30}_${direction}`;
+            if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
+            
+            const offset = positionSlots[slotKey] * 35;
+            positionSlots[slotKey]++;
+
+            const finalLeft = direction === 'in' ? (baseLeft - offset) : (baseLeft + offset);
+
             const icon = document.createElement('div');
             icon.className = 'train-icon';
-            icon.style.top = `${yPos}px`;
-            icon.style.left = `${lineX}px`; // 配線上に配置
+            icon.style.top = `${yPos - 15px}px`; // アイコン中心合わせ
+            icon.style.left = `${finalLeft}px`;
             icon.title = `列車: ${train.trainNo}`;
             trainLayer.appendChild(icon);
         }
 
         ['in', 'out'].forEach(dir => {
-            (timetables[dir] || []).forEach(train => {
-                const stops = Object.keys(train.stops);
-                
-                // 列車が現在地（全表示区間）にいるかチェック
-                // 始発駅の発車時刻〜終着駅の到着時刻の範囲内か
-                const times = stops.map(st => timeToSeconds(train.stops[st]['発'] || train.stops[st]['着'])).filter(t => t !== null);
-                const startTime = Math.min(...times);
-                const endTime = Math.max(...times);
-
-                if (nowSec < startTime || nowSec > endTime) return;
-
-                // 各区間の判定
+            const list = timetables[dir] || [];
+            list.forEach(train => {
                 for (let i = 0; i < currentStations.length - 1; i++) {
-                    const stName = stationsMap[currentStations[i]['駅ID']];
-                    const nextStName = stationsMap[currentStations[i+1]['駅ID']];
+                    const st1 = stationsMap[currentStations[i]['駅ID']];
+                    const st2 = stationsMap[currentStations[i+1]['駅ID']];
                     
-                    if (!train.stops[stName] || !train.stops[nextStName]) continue;
+                    // 時刻表データ内に両方の駅が存在するかチェック
+                    if (train.stops[st1] && train.stops[st2]) {
+                        const depSec = timeToSeconds(train.stops[st1]['発']);
+                        const arrSec = timeToSeconds(train.stops[st2]['着']);
 
-                    const depSec = timeToSeconds(train.stops[stName]['発']);
-                    const nextArrSec = timeToSeconds(train.stops[nextStName]['着']);
-
-                    if (depSec && nextArrSec && nowSec >= depSec && nowSec <= nextArrSec) {
-                        const ratio = (nowSec - depSec) / (nextArrSec - depSec);
-                        const currentY = i * 160 + 40;
-                        const nextY = (i + 1) * 160 + 40;
-                        const yPos = currentY + (nextY - currentY) * ratio;
-                        
-                        registerAndRenderTrain(train, yPos, dir);
-                        break; 
+                        if (depSec && arrSec && nowSec >= depSec && nowSec <= arrSec) {
+                            const ratio = (nowSec - depSec) / (arrSec - depSec);
+                            const yPos = (i * 160 + 40) + ((i + 1) * 160 + 40 - (i * 160 + 40)) * ratio;
+                            registerAndRenderTrain(train, yPos, dir);
+                        }
                     }
                 }
             });
         });
     }
 
-    // 描画部分のテキスト位置調整
-    // ... renderRoute 内の描画ロジック ...
-    // textY を (currentY +/- 40) - 4 に変更（0.1文字分上に修正）
-    if (branch === 'il') {
-        textY = (currentY - 40) - 4; 
-    } else if (branch === 'ir') {
-        textY = (currentY - 40) - 4;
-    } else if (branch === 'ol') {
-        textY = (currentY + 40) - 4;
-    } else if (branch === 'or') {
-        textY = (currentY + 40) - 4;
-    }
-    // ... 以降同じ ...
+    // renderRoute内のテキスト描画（0.1文字分上に微調整）
+    // textY = (計算位置) - 2; // 0.1文字分上にオフセット
+    // ...
 </script>
