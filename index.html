@@ -193,7 +193,7 @@
             position: absolute;
             width: 24px;
             height: 24px;
-            background-image: url('unknown.png');
+            background-image: url('icon/unknown.png');
             background-size: contain;
             background-repeat: no-repeat;
             transition: all 0.5s linear;
@@ -254,6 +254,7 @@
         const LINE_X = 400; 
         const LINE_WIDTH = 20;
 
+        // 5秒ごとに列車位置を更新
         setInterval(updateTrainPositions, 5000);
 
         window.onload = async () => {
@@ -347,9 +348,10 @@
                     if (!sysId) return;
 
                     systemNameMap[sysId] = sysName;
-                    // 枝番がある場合は自動的に「-1.csv」を選択
+                    
+                    // 枝番用の初期csvをセット（例: saikyo-1.csv）
                     if (!activeLayouts[sysId]) {
-                        activeLayouts[sysId] = `${sysId}-1.csv`; 
+                        activeLayouts[sysId] = `display/${sysId}-1.csv`; 
                     }
 
                     const btn = document.createElement('button');
@@ -389,7 +391,6 @@
             timetables.in = [];
             timetables.out = [];
 
-            // マスタに登録されているすべての時刻表ID(路線ID)からデータを取得
             const routeIds = Object.keys(railroadMap);
             for (const routeId of routeIds) {
                 try {
@@ -413,8 +414,9 @@
 
             for (let i = 1; i < lines.length; i++) {
                 const cols = lines[i].split(',');
-                const stationName = cols[0].trim();
-                const type = cols[1].trim(); // 「着」または「発」
+                const stationId = cols[0].trim();
+                const stationName = stationsMap[stationId] || stationId; // IDから駅名に変換してマッチング
+                const type = cols[1].trim(); 
                 
                 for (let j = 2; j < cols.length; j++) {
                     const timeStr = cols[j] ? cols[j].trim() : '';
@@ -442,7 +444,6 @@
                 stationListDiv.innerHTML = '';
                 svgLayer.innerHTML = '';
 
-                // SVGの全幅・全高の設定
                 const totalHeight = currentStations.length * 160 - 80; 
                 svgLayer.setAttribute('height', totalHeight);
                 svgLayer.setAttribute('width', 600);
@@ -452,7 +453,6 @@
                     if (!stationId) return;
                     const stationName = stationsMap[stationId] || stationId;
 
-                    // HTML構造の生成（駅エリア + 駅間エリア）
                     const blockDiv = document.createElement('div');
                     blockDiv.className = 'station-block';
 
@@ -465,22 +465,19 @@
                     nameDiv.innerText = stationName;
                     rowDiv.appendChild(nameDiv);
 
-                    // 分岐ボタンの配置
                     if (row['表示先']) {
                         const btn = document.createElement('button');
                         btn.className = 'branch-trigger';
-                        // 分岐方向に応じてラベルを切り替え
                         const isRinkai = row['表示先'].includes('1');
                         btn.innerText = isRinkai ? '← りんかい線方面' : '→ 相鉄線方面';
                         btn.onclick = () => {
-                            activeLayouts[currentSystem] = `${row['表示先']}.csv`;
+                            activeLayouts[currentSystem] = `display/${row['表示先']}.csv`;
                             renderRoute(); 
                         };
                         rowDiv.appendChild(btn);
                     }
                     blockDiv.appendChild(rowDiv);
 
-                    // 最終駅でなければ駅間エリアを追加
                     if (index < currentStations.length - 1) {
                         const betweenDiv = document.createElement('div');
                         betweenDiv.className = 'between-row';
@@ -488,13 +485,13 @@
                     }
                     stationListDiv.appendChild(blockDiv);
 
-                    // --- SVG配線描画ロジック ---
-                    const currentY = index * 160 + 40; // 駅の中心Y座標
+                    // --- 配線描画ロジック ---
+                    const currentY = index * 160 + 40; 
                     const railId = row['路線ID'];
                     const railInfo = railroadMap[railId];
                     const lineColor = railInfo ? railInfo['ラインカラー'] : '#999999';
 
-                    // 1. 駅エリア内の直線描画
+                    // 1. 駅エリア内の直線
                     const stationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                     stationLine.setAttribute('x1', LINE_X);
                     stationLine.setAttribute('y1', currentY - 40);
@@ -513,17 +510,18 @@
                         let d = '';
 
                         if (branch) {
-                            // 分岐形状の生成
                             const startY = currentY + 40;
                             const endY = nextY - 40;
-                            if (branch === 'ir' || branch === 'or') {
+                            
+                            // 上り分岐(i)・下り分岐(o)ともに形状パターン（左右中央）ごとに計算
+                            if (branch.endsWith('r')) {
                                 // 右へ分岐
                                 d = `M ${LINE_X} ${startY} Q ${LINE_X + 60} ${startY + 40}, ${LINE_X + 60} ${endY}`;
-                            } else if (branch === 'il' || branch === 'ol') {
+                            } else if (branch.endsWith('l')) {
                                 // 左へ分岐
                                 d = `M ${LINE_X} ${startY} Q ${LINE_X - 60} ${startY + 40}, ${LINE_X - 60} ${endY}`;
-                            } else if (branch === 'ic' || branch === 'oc') {
-                                // センター（直下・末端）
+                            } else if (branch.endsWith('c')) {
+                                // センター（直線・末端用）
                                 d = `M ${LINE_X} ${startY} L ${LINE_X} ${endY}`;
                             }
                         } else {
@@ -564,19 +562,17 @@
             trainLayer.innerHTML = '';
 
             const nowSec = new Date().getTime() / 1000;
-            
-            // 位置の重複回避用カウンターオブジェクト
             const positionSlots = {};
 
             function registerAndRenderTrain(train, yPos, direction) {
-                // 上りは線の左側、下りは線の右側
-                const baseLeft = direction === 'in' ? (LINE_X - 40) : (LINE_X + 15);
+                // 上りは線の左側（LINE_X - 40）、下りは線の右側（LINE_X + 15）
+                const baseLeft = direction === 'in' ? (LINE_X - 45) : (LINE_X + 20);
                 
-                // 重複判定用の丸めた位置キー
-                const slotKey = `${Math.round(yPos / 20) * 20}_${direction}`;
+                // 同一付近への配置衝突検知用のキー
+                const slotKey = `${Math.round(yPos / 25) * 25}_${direction}`;
                 if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
                 
-                // 重複している場合は横に28pxずつずらす
+                // 被った場合は横方向に28pxずつずらす
                 const offset = positionSlots[slotKey] * 28;
                 positionSlots[slotKey]++;
 
@@ -584,7 +580,7 @@
 
                 const icon = document.createElement('div');
                 icon.className = 'train-icon';
-                icon.style.top = `${yPos - 12}px`; // アイコンの中心を合わせる
+                icon.style.top = `${yPos - 12}px`; 
                 icon.style.left = `${finalLeft}px`;
                 icon.title = `列車番号: ${train.trainNo} (${direction === 'in' ? '上り' : '下り'})`;
                 trainLayer.appendChild(icon);
@@ -605,13 +601,13 @@
                         const depSec = timeToSeconds(stopInfo['発']);
                         const currentStationY = i * 160 + 40;
 
-                        // 1. 駅に停車中の判定
+                        // 1. 駅エリア停車中
                         if (arrSec && depSec && nowSec >= arrSec && nowSec <= depSec) {
                             registerAndRenderTrain(train, currentStationY, dir);
                             return;
                         }
 
-                        // 2. 駅間を走行中の判定
+                        // 2. 駅間エリア走行中
                         if (i < currentStations.length - 1) {
                             const nextStationId = currentStations[i+1]['駅ID'];
                             const nextStName = stationsMap[nextStationId];
@@ -621,11 +617,10 @@
                             if (nextStopInfo && depSec) {
                                 const nextArrSec = timeToSeconds(nextStopInfo['着']);
                                 if (nextArrSec && nowSec > depSec && nowSec < nextArrSec) {
-                                    // 走行比率の計算
                                     const ratio = (nowSec - depSec) / (nextArrSec - depSec);
                                     const nextStationY = (i + 1) * 160 + 40;
                                     
-                                    // Y座標を駅間エリア内で線形補間
+                                    // 2駅間のY軸線形補間
                                     const yPos = currentStationY + (nextStationY - currentStationY) * ratio;
 
                                     registerAndRenderTrain(train, yPos, dir);
