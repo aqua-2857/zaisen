@@ -227,9 +227,9 @@
 
     <div id="nav-menu" class="nav-menu">
         <div id="last-update" class="nav-menu-item" style="cursor: default; background: none; color: #ccc; font-size: 0.9rem;">
-            最終更新：--:--:--
+            最終更新：取得中...
         </div>
-        <div class="nav-menu-item" onclick="reloadData()">🔄 データを再読み込み</div>
+        <div class="nav-menu-item" onclick="pageReload()">🔄 リロード</div>
     </div>
     <div id="menu-overlay" class="menu-overlay" onclick="toggleMenu()"></div>
 
@@ -251,81 +251,127 @@
         let currentStations = [];   
         let timetables = { in: [], out: [] }; 
 
-        // 定期的な列車位置更新は5秒に1回継続
         setInterval(updateTrainPositions, 5000);
 
         window.onload = async () => {
+            await fetchGitHubCommits(); // GitHub APIからコミット日時を取得
             await initApp();
         };
 
-        // メニューの開閉
         function toggleMenu() {
             document.querySelector('.menu-btn').classList.toggle('active');
             document.getElementById('nav-menu').classList.toggle('active');
             document.getElementById('menu-overlay').classList.toggle('active');
         }
 
-        // 最終更新時刻の更新
-        function setLastUpdateTime() {
-            const now = new Date();
-            document.getElementById('last-update').innerText = '最終更新：' + now.toLocaleTimeString('ja-JP');
+        // 完全にF5と同じ挙動のリロード
+        function pageReload() {
+            location.reload();
         }
 
-        // アプリ全体の初期化
+        // GitHub API を使用して、リポジトリの最新コミット日時を取得する関数
+        async function fetchGitHubCommits() {
+            const updateEl = document.getElementById('last-update');
+            try {
+                // GitHub PagesのURLからユーザー名とリポジトリ名を取得
+                // 例: https://username.github.io/repo-name/ -> username, repo-name
+                const pathParts = window.location.pathname.split('/').filter(p => p !== '');
+                const hostParts = window.location.hostname.split('.');
+                
+                if (hostParts[1] === 'github' && hostParts[2] === 'io') {
+                    const user = hostParts[0];
+                    const repo = pathParts[0];
+                    const apiUrl = `https://api.github.com/repos/${user}/${repo}/commits?per_page=1`;
+                    
+                    const res = await fetch(apiUrl);
+                    if (res.ok) {
+                        const commits = await res.json();
+                        if (commits && commits.length > 0) {
+                            const commitDate = new Date(commits[0].commit.committer.date);
+                            updateEl.innerText = '最終更新：' + commitDate.toLocaleTimeString('ja-JP');
+                            return;
+                        }
+                    }
+                }
+                // フォールバック（APIが使えない、またはローカル環境などの場合）
+                const response = await fetch(window.location.href, { method: 'HEAD' });
+                const lastMod = response.headers.get('Last-Modified');
+                if (lastMod) {
+                    updateEl.innerText = '最終更新：' + new Date(lastMod).toLocaleTimeString('ja-JP');
+                } else {
+                    updateEl.innerText = '最終更新：' + new Date().toLocaleTimeString('ja-JP');
+                }
+            } catch (e) {
+                updateEl.innerText = '最終更新：' + new Date().toLocaleTimeString('ja-JP');
+            }
+        }
+
         async function initApp() {
             await loadMasters();
             await loadInfoAndGenerateButtons();
-            setLastUpdateTime();
         }
 
-        // メニュー内「データを再読み込み」を押したときの処理
-        async function reloadData() {
-            toggleMenu(); // メニューを閉じる
-            await loadMasters();
-            await loadInfoAndGenerateButtons();
-            if (currentSystem) {
-                await loadTimetables();
-                await renderRoute();
-            }
-            setLastUpdateTime();
-        }
-
+        // 安全性を高めたCSVパーサー（列名に予期せぬ文字やBOMが含まれても弾かれない仕様）
         function parseCSV(text) {
             const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
             const lines = cleanText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
             
-            const headers = lines[0].split(',').map(h => h.trim());
+            // ヘッダーの各列から見えない空白や改行を完全に除去
+            const headers = lines[0].split(',').map(h => h.trim().replace(/[\u200B-\u200D\uFEFF]/g, ''));
             
             return lines.slice(1).map(line => {
                 const values = line.split(',');
                 const obj = {};
                 headers.forEach((header, index) => {
-                    obj[header] = values[index] ? values[index].trim() : '';
+                    if (header) {
+                        obj[header] = values[index] ? values[index].trim() : '';
+                    }
                 });
                 return obj;
             });
         }
 
-        async function safeFetch(fileName) {
-            const encodedName = encodeURIComponent(fileName).replace(/%2F/g, '/');
-            const res = await fetch(encodedName);
-            if (!res.ok) {
-                throw new Error(`HTTPエラー! ステータス: ${res.status} (ファイルが見つかりません: ${fileName})`);
+        // ファイル名の有無（zaisen - のプレフィックス）に左右されない自動フォールバック
+        async function safeFetch(baseName) {
+            const namesToTry = [baseName];
+            if (baseName.startsWith('zaisen - ')) {
+                namesToTry.push(baseName.replace('zaisen - ', ''));
+            } else {
+                namesToTry.push(`zaisen - ${baseName}`);
             }
-            return await res.text();
+
+            for (let name of namesToTry) {
+                try {
+                    const encodedName = encodeURIComponent(name).replace(/%2F/g, '/');
+                    const res = await fetch(encodedName);
+                    if (res.ok) {
+                        return await res.text();
+                    }
+                } catch (e) {
+                    // 次の候補を試す
+                }
+            }
+            throw new Error(`ファイルが見つかりません: ${baseName}`);
         }
 
         async function loadMasters() {
             try {
                 const textStation = await safeFetch('zaisen - station_id.csv');
                 parseCSV(textStation).forEach(row => {
-                    stationsMap[row['駅ID']] = row['駅名'];
+                    const idKey = Object.keys(row).find(k => k.includes('駅ID'));
+                    const nameKey = Object.keys(row).find(k => k.includes('駅名'));
+                    if (idKey && nameKey) {
+                        stationsMap[row[idKey]] = row[nameKey];
+                    }
                 });
 
                 const textRail = await safeFetch('zaisen - railroad_id.csv');
                 parseCSV(textRail).forEach(row => {
-                    railroadMap[row['路線ID']] = row;
+                    const idKey = Object.keys(row).find(k => k.includes('路線ID'));
+                    if (idKey && row[idKey]) {
+                        railroadMap[row[idKey]] = row;
+                    }
                 });
             } catch (e) {
                 console.error("マスタデータの読み込みに失敗:", e.message);
@@ -342,8 +388,11 @@
 
                 infoData.forEach(row => {
                     const keys = Object.keys(row);
-                    const sysIdKey = keys.find(k => k.includes('路線系統') && !k.includes('名'));
-                    const sysNameKey = keys.find(k => k.includes('路線系統') && k.includes('名'));
+                    // より柔軟に列名を特定できるように部分一致で判定
+                    const sysIdKey = keys.find(k => k.includes('路線系統') && !k.includes('名') && !k.includes('表示'));
+                    const sysNameKey = keys.find(k => k.includes('路線系統') && (k.includes('名') || k.includes('表示')));
+
+                    if (!sysIdKey) return;
 
                     const sysId = row[sysIdKey];
                     const sysName = row[sysNameKey] || sysId;
@@ -353,7 +402,7 @@
                     systemNameMap[sysId] = sysName;
 
                     if (!activeLayouts[sysId]) {
-                        activeLayouts[sysId] = `zaisen - ${sysId}-1.csv`; 
+                        activeLayouts[sysId] = `${sysId}-1.csv`; 
                     }
 
                     const btn = document.createElement('button');
@@ -441,7 +490,13 @@
                 lineLayerDiv.innerHTML = '';
 
                 currentStations.forEach((row, index) => {
-                    const stationId = row['駅ID'];
+                    const keys = Object.keys(row);
+                    const idKey = keys.find(k => k.includes('駅ID'));
+                    const railIdKey = keys.find(k => k.includes('路線ID'));
+                    
+                    if (!idKey) return;
+                    
+                    const stationId = row[idKey];
                     const stationName = stationsMap[stationId] || stationId;
 
                     const rowDiv = document.createElement('div');
@@ -458,7 +513,7 @@
                         btn.className = 'branch-trigger';
                         btn.innerText = row['分岐方向'] === 'ir' ? '→ 相鉄直通線' : '← りんかい線';
                         btn.onclick = () => {
-                            activeLayouts[currentSystem] = `zaisen - ${row['表示先']}.csv`;
+                            activeLayouts[currentSystem] = `${row['表示先']}.csv`;
                             renderRoute(); 
                         };
                         rowDiv.appendChild(btn);
@@ -466,13 +521,13 @@
 
                     stationListDiv.appendChild(rowDiv);
 
-                    if (index < currentStations.length - 1) {
+                    if (index < currentStations.length - 1 && railIdKey) {
                         const segment = document.createElement('div');
                         segment.className = 'railway-line-segment';
                         segment.style.top = `${(index * 83) + 40}px`;
                         segment.style.height = `83px`;
                         
-                        const railInfo = railroadMap[row['路線ID']];
+                        const railInfo = railroadMap[row[railIdKey]];
                         segment.style.backgroundColor = railInfo ? railInfo['ラインカラー'] : '#999999';
                         lineLayerDiv.appendChild(segment);
                     }
@@ -522,7 +577,11 @@
                 const list = timetables[dir] || [];
                 list.forEach(train => {
                     for (let i = 0; i < currentStations.length; i++) {
-                        const stId = currentStations[i]['駅ID'];
+                        const keys = currentStations[i];
+                        const idKey = Object.keys(keys).find(k => k.includes('駅ID'));
+                        if (!idKey) continue;
+
+                        const stId = keys[idKey];
                         const stName = stationsMap[stId];
                         const stopInfo = train.stops[stName];
 
@@ -538,7 +597,11 @@
                         }
 
                         if (i < currentStations.length - 1) {
-                            const nextStId = currentStations[i+1]['駅ID'];
+                            const nextKeys = currentStations[i+1];
+                            const nextIdKey = Object.keys(nextKeys).find(k => k.includes('駅ID'));
+                            if (!nextIdKey) continue;
+
+                            const nextStId = nextKeys[nextIdKey];
                             const nextStName = stationsMap[nextStId];
                             const nextStopInfo = train.stops[nextStName];
 
