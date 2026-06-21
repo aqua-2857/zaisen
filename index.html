@@ -165,14 +165,14 @@
 
     <script>
         // グローバル状態管理
-        let systemNameMap = {};    // 路線系統ID -> 路線系統名 (info.csv用)
-        let activeLayouts = {};    // 各系統で現在選択されているレイアウトファイルを保持するクラス
+        let systemNameMap = {};    // 路線系統ID -> 路線系統表示名
+        let activeLayouts = {};    // 各系統で現在保持されているレイアウトファイル名
         let stationsMap = {};      // 駅ID -> 駅名
         let railroadMap = {};      // 路線ID -> カラー等情報
         
-        let currentSystem = '';     // 現在表示中の系統ID
-        let currentStations = [];   // 現在表示中の駅・分岐構成データ
-        let timetables = { in: [], out: [] }; // 時刻表データ
+        let currentSystem = '';     // 現在表示中の系統ID (例: saikyo)
+        let currentStations = [];   // 現在表示中の駅順リスト
+        let timetables = { in: [], out: [] }; // 当日の時刻表データ
 
         // タイマー設定
         setInterval(updateClock, 1000);
@@ -223,7 +223,7 @@
             }
         }
 
-        // 2. info.csv の読み込みとボタンの動的生成
+        // 2. zaisen - info.csv の読み込みとボタン生成
         async function loadInfoAndGenerateButtons() {
             try {
                 const resInfo = await fetch('zaisen - info.csv');
@@ -235,15 +235,15 @@
 
                 infoData.forEach(row => {
                     const sysId = row['路線系統'];
-                    const sysName = row['路線系統名'];
+                    const sysName = row['路線系統表示名']; // 新しい列名に対応
                     systemNameMap[sysId] = sysName;
 
-                    // デフォルトのディスプレイファイルは末尾に "-1" を付与して初期化
+                    // デフォルトのディスプレイファイル名を「路線系統-1.csv」にする
                     if (!activeLayouts[sysId]) {
-                        activeLayouts[sysId] = `zaisen - ${sysId}-1.csv`;
+                        activeLayouts[sysId] = `${sysId}-1.csv`; 
                     }
 
-                    // ボタン要素作成
+                    // ボタン要素作成（路線系統表示名を使う）
                     const btn = document.createElement('button');
                     btn.className = 'system-btn';
                     btn.innerText = sysName;
@@ -259,7 +259,7 @@
         async function loadZaisen(systemId) {
             currentSystem = systemId;
             
-            // ヘッダーを路線系統名に変更
+            // ヘッダーを「路線系統表示名」に変更
             document.getElementById('header-title').innerText = systemNameMap[systemId] || "位置情報";
             document.getElementById('home-screen').style.display = 'none';
             document.getElementById('zaisen-screen').style.display = 'block';
@@ -284,7 +284,6 @@
             const dayKey = isHoliday ? 'h' : 'w';
 
             try {
-                // 路線系統ごとの時刻表（例：jreja_w_in.csv）をセット
                 const resIn = await fetch(`jreja_${dayKey}_in.csv`);
                 const textIn = await resIn.text();
                 timetables.in = parseTimetableCSV(textIn);
@@ -325,7 +324,7 @@
 
         // 5. 路線・駅図面のレンダリング
         async function renderRoute() {
-            // 保持されている現在のレイアウトファイル名（-1 もしくは -2）を読み込む
+            // 現在保持されているディスプレイファイル名（例: saikyo-1.csv）を取得
             const layoutFile = activeLayouts[currentSystem];
             const resLayout = await fetch(layoutFile);
             const textLayout = await resLayout.text();
@@ -357,8 +356,8 @@
                     btn.className = 'branch-trigger';
                     btn.innerText = row['分岐方向'] === 'ir' ? '→ 相鉄直通線' : '← りんかい線';
                     btn.onclick = () => {
-                        // 新しい切り替え状態をactiveLayoutsに保存・保持する
-                        activeLayouts[currentSystem] = `zaisen - ${row['表示先']}.csv`;
+                        // 新しい切り替え先のファイル名（例: saikyo-2.csv）を状態に保持
+                        activeLayouts[currentSystem] = `${row['表示先']}.csv`;
                         renderRoute(); // 再描画
                     };
                     rowDiv.appendChild(btn);
@@ -407,7 +406,7 @@
                 const slotKey = `${Math.round(yPos)}_${direction}`;
                 
                 if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
-                const offset = positionSlots[slotKey] * 30; // 横にずらす
+                const offset = positionSlots[slotKey] * 30; // 被り時に横へずらす
                 positionSlots[slotKey]++;
 
                 const icon = document.createElement('div');
@@ -429,7 +428,7 @@
                         if (!stopInfo) continue;
 
                         const arrSec = timeToSeconds(stopInfo['着']);
-                        const depSec = timeToSeconds(stopInfo['発']);
+                        const depSec = timeToSeconds(stopInfo['发'] || stopInfo['発']);
 
                         // 駅停車中
                         if (arrSec && depSec && nowSec >= arrSec && nowSec <= depSec) {
