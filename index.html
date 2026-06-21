@@ -1,77 +1,122 @@
-<style>
-    /* 列車アイコンを30pxに */
-    .train-icon {
-        position: absolute;
-        width: 30px;
-        height: 30px;
-        background-image: url('icon/unknown.png');
-        background-size: contain;
-        background-repeat: no-repeat;
-        transition: all 0.5s linear;
-        z-index: 10;
-    }
-</style>
-
-<script>
-    // 60秒ごとに更新
-    setInterval(updateTrainPositions, 60000);
-
-    // 更新ロジックの修正
-    function updateTrainPositions() {
-        if (!currentStations || !currentStations.length) return;
-        const trainLayer = document.getElementById('train-layer');
-        if (!trainLayer) return;
-        trainLayer.innerHTML = '';
-
-        const nowSec = new Date().getTime() / 1000;
-        const positionSlots = {};
-        const lineX = getLineX();
-
-        // 現在表示中の駅リスト（範囲外フィルタリング用）
-        const visibleStationNames = currentStations.map(s => stationsMap[s['駅ID']] || s['駅ID']);
-
-        function registerAndRenderTrain(train, yPos, direction) {
-            const baseLeft = direction === 'in' ? (lineX - 38) : (lineX + 8);
-            const slotKey = `${Math.round(yPos / 30) * 30}_${direction}`;
-            if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
-            
-            const offset = positionSlots[slotKey] * 35;
-            positionSlots[slotKey]++;
-
-            const finalLeft = direction === 'in' ? (baseLeft - offset) : (baseLeft + offset);
-
-            const icon = document.createElement('div');
-            icon.className = 'train-icon';
-            icon.style.top = `${yPos - 15px}px`; // アイコン中心合わせ
-            icon.style.left = `${finalLeft}px`;
-            icon.title = `列車: ${train.trainNo}`;
-            trainLayer.appendChild(icon);
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在線アプリ</title>
+    <style>
+        :root {
+            --bg-color: #F0F0F0;
+            --sub-bg-color: #F8F8F8;
+            --header-bg: #1C1C1C;
+            --btn-color: #333333;
+            --row-height: 80px; 
         }
 
-        ['in', 'out'].forEach(dir => {
-            const list = timetables[dir] || [];
-            list.forEach(train => {
-                for (let i = 0; i < currentStations.length - 1; i++) {
-                    const st1 = stationsMap[currentStations[i]['駅ID']];
-                    const st2 = stationsMap[currentStations[i+1]['駅ID']];
-                    
-                    // 時刻表データ内に両方の駅が存在するかチェック
-                    if (train.stops[st1] && train.stops[st2]) {
-                        const depSec = timeToSeconds(train.stops[st1]['発']);
-                        const arrSec = timeToSeconds(train.stops[st2]['着']);
+        body { margin: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: var(--bg-color); color: #333; overflow-x: hidden; }
+        .header { background: var(--header-bg); color: white; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; height: 56px; font-size: 1.1rem; position: sticky; top: 0; z-index: 100; }
+        .back-btn { background: none; border: 1px solid white; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; display: none; }
+        .screen { padding: 0; }
+        #zaisen-screen { display: none; position: relative; width: 100%; max-width: 600px; margin: 0 auto; background-color: var(--bg-color); }
+        .station-block { display: flex; flex-direction: column; position: relative; width: 100%; }
+        .station-row { display: flex; align-items: center; height: var(--row-height); background-color: var(--sub-bg-color); border-bottom: 1px solid #e0e0e0; position: relative; width: 100%; }
+        .between-row { height: var(--row-height); background-color: var(--bg-color); position: relative; width: 100%; }
+        .station-name-container { display: flex; align-items: center; gap: 6px; padding-left: 20px; z-index: 2; max-width: 60%; }
+        .station-name { font-weight: bold; font-size: 1.1rem; }
+        .station-icon-dot { width: 18px; height: 18px; background-color: #10B981; border-radius: 50%; color: white; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; }
+        
+        .railway-svg-container { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .train-layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        /* アイコンサイズ 30px */
+        .train-icon { position: absolute; width: 30px; height: 30px; background-image: url('icon/unknown.png'); background-size: contain; background-repeat: no-repeat; transition: all 1.0s linear; }
+        
+        .branch-clickable-container { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 15; }
+        .branch-clickable-zone { position: absolute; cursor: pointer; pointer-events: auto; }
+    </style>
+</head>
+<body>
 
-                        if (depSec && arrSec && nowSec >= depSec && nowSec <= arrSec) {
-                            const ratio = (nowSec - depSec) / (arrSec - depSec);
-                            const yPos = (i * 160 + 40) + ((i + 1) * 160 + 40 - (i * 160 + 40)) * ratio;
-                            registerAndRenderTrain(train, yPos, dir);
+    <div class="header">
+        <button id="back-button" class="back-btn" onclick="showHomeScreen()">← 戻る</button>
+        <span id="header-title">ホーム</span>
+    </div>
+
+    <div id="home-screen" class="screen"></div>
+    <div id="zaisen-screen" class="screen">
+        <div id="station-list"></div>
+        <svg id="svg-layer" class="railway-svg-container"></svg>
+        <div id="clickable-layer" class="branch-clickable-container"></div>
+        <div id="train-layer" class="train-layer"></div>
+    </div>
+
+    <script>
+        let stationsMap = {}, railroadMap = {}, currentSystem = '', currentStations = [], timetables = { in: [], out: [] };
+        const LINE_WIDTH = 20;
+
+        // 1分ごとに更新
+        setInterval(updateTrainPositions, 60000);
+
+        async function loadMasters() {
+            // CSVロード処理(省略/前回同様)
+        }
+
+        function renderRoute() {
+            // 描画ロジック(前回同様)
+            updateTrainPositions();
+        }
+
+        function updateTrainPositions() {
+            if (!currentStations.length) return;
+            const trainLayer = document.getElementById('train-layer');
+            trainLayer.innerHTML = '';
+
+            const now = new Date();
+            const nowSec = (now.getHours() * 3600) + (now.getMinutes() * 60);
+            const lineX = (document.getElementById('zaisen-screen').clientWidth || 600) * 0.7;
+
+            // CSVにある駅名のリストを作成
+            const validStationNames = currentStations.map(s => stationsMap[s['駅ID']] || s['駅ID']);
+
+            ['in', 'out'].forEach(dir => {
+                timetables[dir].forEach(train => {
+                    // 現在の列車が、現在表示中の路線上に存在するか判定
+                    let activeSegment = null;
+                    for (let i = 0; i < validStationNames.length - 1; i++) {
+                        const s1 = validStationNames[i];
+                        const s2 = validStationNames[i+1];
+                        if (train.stops[s1] && train.stops[s2]) {
+                            const dep = timeToSeconds(train.stops[s1]['発']);
+                            const arr = timeToSeconds(train.stops[s2]['着']);
+                            if (dep && arr && nowSec >= dep && nowSec <= arr) {
+                                activeSegment = { i, dep, arr };
+                                break;
+                            }
                         }
                     }
-                }
-            });
-        });
-    }
 
-    // renderRoute内のテキスト描画（0.1文字分上に微調整）
-    // textY = (計算位置) - 2; // 0.1文字分上にオフセット
-    // ...
-</script>
+                    if (activeSegment) {
+                        const ratio = (nowSec - activeSegment.dep) / (activeSegment.arr - activeSegment.dep);
+                        const y1 = activeSegment.i * 160 + 40;
+                        const y2 = (activeSegment.i + 1) * 160 + 40;
+                        const yPos = y1 + (y2 - y1) * ratio;
+
+                        const icon = document.createElement('div');
+                        icon.className = 'train-icon';
+                        icon.style.top = `${yPos - 15}px`; 
+                        icon.style.left = `${lineX - 15}px`;
+                        trainLayer.appendChild(icon);
+                    }
+                });
+            });
+        }
+
+        function timeToSeconds(timeStr) {
+            if (!timeStr) return null;
+            const parts = timeStr.split(':');
+            return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60;
+        }
+
+        // --- 以前のコードの続き（初期化処理等） ---
+    </script>
+</body>
+</html>
