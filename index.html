@@ -1,742 +1,88 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>在線アプリ</title>
-    <style>
-        :root {
-            --bg-color: #F0F0F0;        /* 駅間エリア：メイン背景色 */
-            --sub-bg-color: #F8F8F8;    /* 駅エリア：サブ背景色 */
-            --header-bg: #1C1C1C;
-            --btn-color: #333333;
-            --row-height: 80px; 
+<style>
+    /* 列車アイコンサイズをエリアの半分の高さ(40px)へ調整 */
+    .train-icon {
+        position: absolute;
+        width: 40px; 
+        height: 40px;
+        background-image: url('icon/unknown.png');
+        background-size: contain;
+        background-repeat: no-repeat;
+        transition: all 0.5s linear;
+        transform: translate(-50%, -50%); /* アイコンの中心が座標にくるように */
+    }
+</style>
+
+<script>
+    // ... 前半は変更なし ...
+
+    function updateTrainPositions() {
+        if (!currentStations || !currentStations.length) return;
+        const trainLayer = document.getElementById('train-layer');
+        if (!trainLayer) return;
+        trainLayer.innerHTML = '';
+
+        const nowSec = new Date().getTime() / 1000;
+        const lineX = getLineX();
+
+        // 現在表示されている駅名のリストを作成（これに含まれないエリアの列車は表示しない）
+        const visibleStationNames = currentStations.map(s => stationsMap[s['駅ID']] || s['駅ID']);
+
+        function registerAndRenderTrain(train, yPos, direction) {
+            const icon = document.createElement('div');
+            icon.className = 'train-icon';
+            icon.style.top = `${yPos}px`;
+            icon.style.left = `${lineX}px`; // 配線上に配置
+            icon.title = `列車: ${train.trainNo}`;
+            trainLayer.appendChild(icon);
         }
 
-        body {
-            margin: 0;
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: #333;
-            overflow-x: hidden; 
-        }
-
-        .header { 
-            background: var(--header-bg);
-            color: white; 
-            padding: 0 15px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            height: 56px;
-            font-size: 1.1rem; 
-            position: sticky; 
-            top: 0;
-            z-index: 100; 
-            margin: 0;
-        }
-
-        .back-btn {
-            background: none;
-            border: 1px solid white;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            display: none;
-        }
-
-        .menu-btn {
-            width: 44px;
-            height: 44px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            z-index: 200;
-        }
-        .menu-btn span {
-            display: block;
-            width: 24px;
-            height: 2px;
-            background-color: white;
-            transition: 0.3s;
-        }
-
-        .menu-btn.active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-        .menu-btn.active span:nth-child(2) { opacity: 0; }
-        .menu-btn.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-
-        .nav-menu {
-            position: fixed;
-            top: 0;
-            right: -100%;
-            width: 250px;
-            height: 100%;
-            background: rgba(28, 28, 28, 0.95);
-            z-index: 150;
-            transition: 0.3s;
-            padding-top: 60px;
-            box-shadow: -2px 0 10px rgba(0,0,0,0.5);
-        }
-        .nav-menu.active { right: 0; }
-        .nav-menu-item {
-            padding: 20px;
-            color: white;
-            border-bottom: 1px solid #444;
-            cursor: pointer;
-            font-size: 16px;
-            display: block;
-            text-decoration: none;
-        }
-        .nav-menu-item:active { background: #444; }
-
-        .menu-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: none;
-            z-index: 140;
-        }
-        .menu-overlay.active { display: block; }
-
-        .screen { padding: 0; } 
-
-        #home-screen {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            margin-top: 50px;
-            padding: 20px;
-        }
-
-        .system-btn {
-            background-color: var(--btn-color);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.2rem;
-            border-radius: 8px;
-            cursor: pointer;
-            width: 80%;
-            max-width: 400px;
-            transition: opacity 0.2s;
-        }
-        .system-btn:hover { opacity: 0.9; }
-
-        #zaisen-screen {
-            display: none;
-            position: relative;
-            width: 100%;
-            max-width: 600px; 
-            margin: 0 auto;
-            background-color: var(--bg-color); 
-        }
-
-        .station-block {
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            width: 100%;
-        }
-
-        .station-row {
-            display: flex;
-            align-items: center;
-            height: var(--row-height);
-            background-color: var(--sub-bg-color); 
-            border-bottom: 1px solid #e0e0e0;
-            box-sizing: border-box;
-            position: relative;
-            width: 100%;
-        }
-
-        .between-row {
-            height: var(--row-height);
-            background-color: var(--bg-color); 
-            position: relative;
-            width: 100%;
-        }
-
-        .station-name-container {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding-left: 20px;
-            z-index: 2;
-            max-width: 60%; 
-            box-sizing: border-box;
-        }
-
-        .station-name {
-            font-weight: bold;
-            font-size: 1.1rem;
-            color: #333;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .station-icon-dot {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 18px;
-            height: 18px;
-            background-color: #10B981; 
-            border-radius: 50%;
-            color: white;
-            font-size: 0.65rem;
-            font-weight: bold;
-            flex-shrink: 0;
-        }
-
-        .railway-svg-container {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        }
-
-        .train-layer {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        .train-icon {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            background-image: url('icon/unknown.png');
-            background-size: contain;
-            background-repeat: no-repeat;
-            transition: all 0.5s linear;
-        }
-
-        .branch-clickable-container {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 15;
-        }
-        .branch-clickable-zone {
-            position: absolute;
-            cursor: pointer;
-            pointer-events: auto;
-            background-color: rgba(0, 122, 255, 0.0); 
-            transition: background-color 0.2s;
-        }
-        .branch-clickable-zone:active {
-            background-color: rgba(0, 122, 255, 0.2);
-        }
-    </style>
-</head>
-<body>
-
-    <div class="header">
-        <button id="back-button" class="back-btn" onclick="showHomeScreen()">← 戻る</button>
-        <span id="header-title">ホーム</span>
-        <div class="menu-btn" onclick="toggleMenu()">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-    </div>
-
-    <div id="nav-menu" class="nav-menu">
-        <div id="last-update" class="nav-menu-item" style="cursor: default; background: none; color: #ccc; font-size: 0.9rem;">
-            最終更新：取得中...
-        </div>
-        <div class="nav-menu-item" onclick="pageReload()">リロード</div>
-    </div>
-    <div id="menu-overlay" class="menu-overlay" onclick="toggleMenu()"></div>
-
-    <div id="home-screen" class="screen"></div>
-
-    <div id="zaisen-screen" class="screen">
-        <div id="station-list"></div>
-        <svg id="svg-layer" class="railway-svg-container"></svg>
-        <div id="clickable-layer" class="branch-clickable-container"></div>
-        <div id="train-layer" class="train-layer"></div>
-    </div>
-
-    <script>
-        let systemNameMap = {};    
-        let activeLayouts = {};    
-        let stationsMap = {};      
-        let railroadMap = {};      
-        
-        let currentSystem = '';     
-        let currentStations = [];   
-        let timetables = { in: [], out: [] }; 
-
-        function getLineX() {
-            const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
-            return screenWidth * 0.70;
-        }
-        
-        const LINE_WIDTH = 20;
-
-        window.onresize = () => {
-            if (document.getElementById('zaisen-screen').style.display === 'block') {
-                renderRoute();
-            }
-        };
-
-        setInterval(updateTrainPositions, 5000);
-
-        window.onload = async () => {
-            await fetchGitHubCommits();
-            await initApp();
-        };
-
-        function toggleMenu() {
-            document.querySelector('.menu-btn').classList.toggle('active');
-            document.getElementById('nav-menu').classList.toggle('active');
-            document.getElementById('menu-overlay').classList.toggle('active');
-        }
-
-        function pageReload() { location.reload(); }
-
-        async function fetchGitHubCommits() {
-            const updateEl = document.getElementById('last-update');
-            try {
-                const response = await fetch(window.location.href, { method: 'HEAD' });
-                const lastMod = response.headers.get('Last-Modified');
-                updateEl.innerText = '最終更新：' + (lastMod ? new Date(lastMod) : new Date()).toLocaleTimeString('ja-JP');
-            } catch (e) {
-                updateEl.innerText = '最終更新：' + new Date().toLocaleTimeString('ja-JP');
-            }
-        }
-
-        async function initApp() {
-            await loadMasters();
-            await loadInfoAndGenerateButtons();
-        }
-
-        function parseCSV(text) {
-            const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
-            const lines = cleanText.split('\n').filter(line => line.trim() !== '');
-            if (lines.length === 0) return [];
-            
-            const headers = lines[0].split(',').map(h => h.trim().replace(/[\u200B-\u200D\uFEFF]/g, ''));
-            
-            return lines.slice(1).map(line => {
-                const values = line.split(',');
-                const obj = {};
-                headers.forEach((header, index) => {
-                    if (header) {
-                        obj[header] = values[index] ? values[index].trim() : '';
-                    }
-                });
-                return obj;
-            });
-        }
-
-        async function safeFetch(baseName) {
-            try {
-                const encodedName = encodeURIComponent(baseName).replace(/%2F/g, '/');
-                const res = await fetch(encodedName);
-                if (res.ok) return await res.text();
-            } catch (e) {}
-            throw new Error(`ファイルが見つかりません: ${baseName}`);
-        }
-
-        async function loadMasters() {
-            try {
-                const textStation = await safeFetch('zaisen - station_id.csv');
-                parseCSV(textStation).forEach(row => {
-                    if (row['駅ID'] && row['駅名']) {
-                        stationsMap[row['駅ID']] = row['駅名'];
-                    }
-                });
-
-                const textRail = await safeFetch('zaisen - railroad_id.csv');
-                parseCSV(textRail).forEach(row => {
-                    if (row['路線ID']) {
-                        railroadMap[row['路線ID']] = row;
-                    }
-                });
-            } catch (e) {
-                console.error("マスタデータの読み込みに失敗:", e.message);
-            }
-        }
-
-        // 路線IDからラインカラーを安全に引き出す関数
-        function getLineColorById(routeId) {
-            if (routeId && railroadMap[routeId]) {
-                return railroadMap[routeId]['ラインカラー'];
-            }
-            return '#999999';
-        }
-
-        // 路線IDから路線名を表示用に引き出す関数
-        function getRouteNameById(routeId) {
-            if (routeId && railroadMap[routeId]) {
-                return railroadMap[routeId]['路線名'];
-            }
-            return routeId || ''; // 見つからなければIDをそのまま返す
-        }
-
-        async function loadInfoAndGenerateButtons() {
-            try {
-                const textInfo = await safeFetch('zaisen - info.csv');
-                const infoData = parseCSV(textInfo);
-
-                const homeScreen = document.getElementById('home-screen');
-                homeScreen.innerHTML = '';
-
-                infoData.forEach(row => {
-                    const sysId = row['路線系統'];
-                    const sysName = row['路線系統表示名'] || sysId;
-                    if (!sysId) return;
-
-                    systemNameMap[sysId] = sysName;
-                    
-                    if (!activeLayouts[sysId]) {
-                        activeLayouts[sysId] = `display/${sysId}-1.csv`; 
-                    }
-
-                    const btn = document.createElement('button');
-                    btn.className = 'system-btn';
-                    btn.innerText = sysName;
-                    btn.onclick = () => loadZaisen(sysId);
-                    homeScreen.appendChild(btn);
-                });
-            } catch (e) {
-                console.error("info.csvの読み込みに失敗:", e.message);
-            }
-        }
-
-        async function loadZaisen(systemId) {
-            currentSystem = systemId;
-            document.getElementById('header-title').innerText = systemNameMap[systemId] || "位置情報";
-            document.getElementById('home-screen').style.display = 'none';
-            document.getElementById('zaisen-screen').style.display = 'block';
-            document.getElementById('back-button').style.display = 'block';
-
-            await loadTimetables();
-            await renderRoute();
-        }
-
-        function showHomeScreen() {
-            document.getElementById('header-title').innerText = "ホーム";
-            document.getElementById('home-screen').style.display = 'flex';
-            document.getElementById('zaisen-screen').style.display = 'none';
-            document.getElementById('back-button').style.display = 'none';
-        }
-
-        async function loadTimetables() {
-            const now = new Date();
-            const isHoliday = (now.getDay() === 0 || now.getDay() === 6);
-            const dayKey = isHoliday ? 'h' : 'w';
-
-            timetables.in = [];
-            timetables.out = [];
-
-            const routeIds = Object.keys(railroadMap);
-            for (const routeId of routeIds) {
-                try {
-                    const textIn = await safeFetch(`${routeId}_${dayKey}_in.csv`);
-                    timetables.in = timetables.in.concat(parseTimetableCSV(textIn));
-                } catch (e) {}
-                try {
-                    const textOut = await safeFetch(`${routeId}_${dayKey}_out.csv`);
-                    timetables.out = timetables.out.concat(parseTimetableCSV(textOut));
-                } catch (e) {}
-            }
-        }
-
-        function parseTimetableCSV(text) {
-            const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
-            const lines = cleanText.split('\n').filter(l => l.trim() !== '');
-            if (lines.length < 2) return [];
-            
-            const trainNumbers = lines[0].split(',').slice(2);
-            const trains = trainNumbers.map(num => ({ trainNo: num.trim(), stops: {} }));
-
-            for (let i = 1; i < lines.length; i++) {
-                const cols = lines[i].split(',');
-                const stationId = cols[0].trim();
-                const stationName = stationsMap[stationId] || stationId; 
-                const type = cols[1].trim(); 
+        ['in', 'out'].forEach(dir => {
+            (timetables[dir] || []).forEach(train => {
+                const stops = Object.keys(train.stops);
                 
-                for (let j = 2; j < cols.length; j++) {
-                    const timeStr = cols[j] ? cols[j].trim() : '';
-                    if (timeStr && trains[j-2]) {
-                        if (!trains[j-2].stops[stationName]) {
-                            trains[j-2].stops[stationName] = {};
-                        }
-                        trains[j-2].stops[stationName][type] = timeStr;
+                // 列車が現在地（全表示区間）にいるかチェック
+                // 始発駅の発車時刻〜終着駅の到着時刻の範囲内か
+                const times = stops.map(st => timeToSeconds(train.stops[st]['発'] || train.stops[st]['着'])).filter(t => t !== null);
+                const startTime = Math.min(...times);
+                const endTime = Math.max(...times);
+
+                if (nowSec < startTime || nowSec > endTime) return;
+
+                // 各区間の判定
+                for (let i = 0; i < currentStations.length - 1; i++) {
+                    const stName = stationsMap[currentStations[i]['駅ID']];
+                    const nextStName = stationsMap[currentStations[i+1]['駅ID']];
+                    
+                    if (!train.stops[stName] || !train.stops[nextStName]) continue;
+
+                    const depSec = timeToSeconds(train.stops[stName]['発']);
+                    const nextArrSec = timeToSeconds(train.stops[nextStName]['着']);
+
+                    if (depSec && nextArrSec && nowSec >= depSec && nowSec <= nextArrSec) {
+                        const ratio = (nowSec - depSec) / (nextArrSec - depSec);
+                        const currentY = i * 160 + 40;
+                        const nextY = (i + 1) * 160 + 40;
+                        const yPos = currentY + (nextY - currentY) * ratio;
+                        
+                        registerAndRenderTrain(train, yPos, dir);
+                        break; 
                     }
                 }
-            }
-            return trains.filter(t => t.trainNo !== '');
-        }
-
-        async function renderRoute() {
-            const layoutFile = activeLayouts[currentSystem];
-            if (!layoutFile) return;
-
-            try {
-                const textLayout = await safeFetch(layoutFile);
-                currentStations = parseCSV(textLayout);
-
-                const stationListDiv = document.getElementById('station-list');
-                const svgLayer = document.getElementById('svg-layer');
-                const clickableLayer = document.getElementById('clickable-layer');
-                const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
-                const lineX = getLineX();
-
-                stationListDiv.innerHTML = '';
-                svgLayer.innerHTML = '';
-                clickableLayer.innerHTML = '';
-
-                const totalHeight = currentStations.length * 160 - 80; 
-                svgLayer.setAttribute('height', totalHeight);
-                svgLayer.setAttribute('width', screenWidth);
-                svgLayer.setAttribute('viewBox', `0 0 ${screenWidth} ${totalHeight}`);
-
-                currentStations.forEach((row, index) => {
-                    const stationId = row['駅ID'];
-                    if (!stationId) return;
-                    const stationName = stationsMap[stationId] || stationId;
-
-                    const blockDiv = document.createElement('div');
-                    blockDiv.className = 'station-block';
-
-                    const rowDiv = document.createElement('div');
-                    rowDiv.className = 'station-row';
-                    rowDiv.id = `station-row-${stationId}`;
-
-                    const nameContainer = document.createElement('div');
-                    nameContainer.className = 'station-name-container';
-                    
-                    const nameDiv = document.createElement('div');
-                    nameDiv.className = 'station-name';
-                    nameDiv.innerText = stationName;
-                    
-                    const dotIcon = document.createElement('div');
-                    dotIcon.className = 'station-icon-dot';
-                    dotIcon.innerText = '>';
-
-                    nameContainer.appendChild(nameDiv);
-                    nameContainer.appendChild(dotIcon);
-                    rowDiv.appendChild(nameContainer);
-                    blockDiv.appendChild(rowDiv);
-
-                    if (index < currentStations.length - 1) {
-                        const betweenDiv = document.createElement('div');
-                        betweenDiv.className = 'between-row';
-                        blockDiv.appendChild(betweenDiv);
-                    }
-                    stationListDiv.appendChild(blockDiv);
-
-                    // --- 配線・分岐 描画ロジック ---
-                    const currentY = index * 160 + 40; 
-                    
-                    const currentRailId = row['路線ID'];
-                    const currentLineColor = getLineColorById(currentRailId);
-                    
-                    // 【修正】「分岐路線」列（路線ID）をマスタ引きして正しい路線名とカラーを取得
-                    const branchRouteId = row['分岐路線'] || '';
-                    const targetBranchName = getRouteNameById(branchRouteId);
-                    const branchLineColor = getLineColorById(branchRouteId);
-
-                    if (index < currentStations.length - 1) {
-                        const nextY = (index + 1) * 160 + 40;
-                        const branch = row['分岐方向']; 
-
-                        let mainD = `M ${lineX} ${nextY} L ${lineX} ${currentY}`;
-                        
-                        if (branch === 'ic' || branch === 'oc') {
-                            mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + 80}`;
-                        }
-
-                        const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                        mainPath.setAttribute('d', mainD);
-                        mainPath.setAttribute('stroke', currentLineColor);
-                        mainPath.setAttribute('stroke-width', LINE_WIDTH);
-                        mainPath.setAttribute('fill', 'none');
-                        svgLayer.appendChild(mainPath);
-
-                        if (branch && branch !== 'ic' && branch !== 'oc') {
-                            const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                            let branchD = '';
-                            let textX = 0;
-                            let textY = 0;
-
-                            let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = 40;
-
-                            // 【座標調整】textYの基準位置を0.7文字分（約+11px）下げて配線の中心に配置
-                            if (branch === 'il') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX - 40} ${currentY - 40} L 0 ${currentY - 40}`;
-                                textX = 20; textY = (currentY - 40) + 5; 
-                                zoneLeft = 0; zoneTop = currentY - 60; zoneWidth = lineX; zoneHeight = 50;
-                            } else if (branch === 'ir') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX + 40} ${currentY - 40} L ${screenWidth} ${currentY - 40}`;
-                                textX = lineX + 40; textY = (currentY - 40) + 5; 
-                                zoneLeft = lineX; zoneTop = currentY - 60; zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                            } else if (branch === 'ol') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX - 40} ${currentY + 40} L 0 ${currentY + 40}`;
-                                textX = 20; textY = (currentY + 40) + 5; 
-                                zoneLeft = 0; zoneTop = currentY + 15; zoneWidth = lineX; zoneHeight = 50;
-                            } else if (branch === 'or') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX + 40} ${currentY + 40} L ${screenWidth} ${currentY + 40}`;
-                                textX = lineX + 40; textY = (currentY + 40) + 5; 
-                                zoneLeft = lineX; zoneTop = currentY + 15; zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                            }
-
-                            if (branchD) {
-                                branchPath.setAttribute('d', branchD);
-                                branchPath.setAttribute('stroke', branchLineColor);
-                                branchPath.setAttribute('stroke-width', LINE_WIDTH);
-                                branchPath.setAttribute('fill', 'none');
-                                svgLayer.appendChild(branchPath);
-
-                                if (targetBranchName) {
-                                    const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                                    textSvg.setAttribute('x', textX);
-                                    textSvg.setAttribute('y', textY);
-                                    textSvg.setAttribute('fill', '#FFFFFF');
-                                    textSvg.setAttribute('font-size', '14px');
-                                    textSvg.setAttribute('font-weight', 'bold');
-                                    textSvg.setAttribute('dominant-baseline', 'central'); // 垂直方向の軸を中央に固定
-                                    textSvg.textContent = targetBranchName;
-                                    svgLayer.appendChild(textSvg);
-                                }
-
-                                if (row['表示先']) {
-                                    const clickZone = document.createElement('div');
-                                    clickZone.className = 'branch-clickable-zone';
-                                    clickZone.style.left = `${zoneLeft}px`;
-                                    clickZone.style.top = `${zoneTop}px`;
-                                    clickZone.style.width = `${zoneWidth}px`;
-                                    clickZone.style.height = `${zoneHeight}px`;
-                                    
-                                    clickZone.onclick = (e) => {
-                                        e.stopPropagation();
-                                        activeLayouts[currentSystem] = `display/${row['表示先']}.csv`;
-                                        renderRoute(); 
-                                    };
-                                    clickableLayer.appendChild(clickZone);
-                                }
-                            }
-                        }
-                    }
-
-                    const stationDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                    stationDot.setAttribute('cx', lineX);
-                    stationDot.setAttribute('cy', currentY);
-                    stationDot.setAttribute('r', '14'); 
-                    stationDot.setAttribute('fill', '#000000');
-                    svgLayer.appendChild(stationDot);
-                });
-
-                updateTrainPositions();
-            } catch(e) {
-                console.error("レイアウトファイルの読み込みに失敗しました:", e.message);
-            }
-        }
-
-        function timeToSeconds(timeStr) {
-            if (!timeStr) return null;
-            const clean = timeStr.replace(':', '');
-            if (clean.length < 3) return null;
-            const h = parseInt(clean.substring(0, clean.length - 2));
-            const m = parseInt(clean.substring(clean.length - 2));
-            const now = new Date();
-            return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0).getTime() / 1000;
-        }
-
-        function updateTrainPositions() {
-            if (!currentStations || !currentStations.length) return;
-            const trainLayer = document.getElementById('train-layer');
-            if (!trainLayer) return;
-            trainLayer.innerHTML = '';
-
-            const nowSec = new Date().getTime() / 1000;
-            const positionSlots = {};
-            const lineX = getLineX();
-
-            function registerAndRenderTrain(train, yPos, direction) {
-                const baseLeft = direction === 'in' ? (lineX - 35) : (lineX + 15);
-                
-                const slotKey = `${Math.round(yPos / 20) * 20}_${direction}`;
-                if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
-                
-                const offset = positionSlots[slotKey] * 28;
-                positionSlots[slotKey]++;
-
-                const finalLeft = direction === 'in' ? (baseLeft - offset) : (baseLeft + offset);
-
-                const icon = document.createElement('div');
-                icon.className = 'train-icon';
-                icon.style.top = `${yPos - 12}px`; 
-                icon.style.left = `${finalLeft}px`;
-                icon.title = `列車番号: ${train.trainNo} (${direction === 'in' ? '上り' : '下り'})`;
-                trainLayer.appendChild(icon);
-            }
-
-            ['in', 'out'].forEach(dir => {
-                const list = timetables[dir] || [];
-                list.forEach(train => {
-                    for (let i = 0; i < currentStations.length; i++) {
-                        const stationId = currentStations[i]['駅ID'];
-                        const stName = stationsMap[stationId];
-                        if (!stName) continue;
-                        
-                        const stopInfo = train.stops[stName];
-                        if (!stopInfo) continue;
-
-                        const arrSec = timeToSeconds(stopInfo['着']);
-                        const depSec = timeToSeconds(stopInfo['発']);
-                        const currentStationY = i * 160 + 40;
-
-                        if (arrSec && depSec && nowSec >= arrSec && nowSec <= depSec) {
-                            registerAndRenderTrain(train, currentStationY, dir);
-                            return;
-                        }
-
-                        if (i < currentStations.length - 1) {
-                            const nextStationId = currentStations[i+1]['駅ID'];
-                            const nextStName = stationsMap[nextStationId];
-                            if (!nextStName) continue;
-                            
-                            const nextStopInfo = train.stops[nextStName];
-                            if (nextStopInfo && depSec) {
-                                const nextArrSec = timeToSeconds(nextStopInfo['着']);
-                                if (nextArrSec && nowSec > depSec && nowSec < nextArrSec) {
-                                    const ratio = (nowSec - depSec) / (nextArrSec - depSec);
-                                    const nextStationY = (i + 1) * 160 + 40;
-                                    const yPos = currentStationY + (nextStationY - currentStationY) * ratio;
-
-                                    registerAndRenderTrain(train, yPos, dir);
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                });
             });
-        }
-    </script>
-</body>
-</html>
+        });
+    }
+
+    // 描画部分のテキスト位置調整
+    // ... renderRoute 内の描画ロジック ...
+    // textY を (currentY +/- 40) - 4 に変更（0.1文字分上に修正）
+    if (branch === 'il') {
+        textY = (currentY - 40) - 4; 
+    } else if (branch === 'ir') {
+        textY = (currentY - 40) - 4;
+    } else if (branch === 'ol') {
+        textY = (currentY + 40) - 4;
+    } else if (branch === 'or') {
+        textY = (currentY + 40) - 4;
+    }
+    // ... 以降同じ ...
+</script>
