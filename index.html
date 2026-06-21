@@ -84,7 +84,6 @@
             padding: 0;
         }
 
-        /* 中央やや右の線（太さ20px） */
         .railway-line-container {
             position: absolute;
             right: 120px;
@@ -100,7 +99,6 @@
             position: absolute;
         }
 
-        /* 駅エリア（サブ背景色） */
         .station-row {
             display: flex;
             align-items: center;
@@ -111,7 +109,6 @@
             border-bottom: 1px solid #e0e0e0;
         }
 
-        /* 駅名表示（画面左側） */
         .station-name {
             width: 150px;
             padding-left: 20px;
@@ -120,7 +117,6 @@
             z-index: 2;
         }
 
-        /* 列車アイコン */
         .train-icon {
             position: absolute;
             width: 24px;
@@ -132,7 +128,6 @@
             transition: all 0.5s linear;
         }
 
-        /* 分岐切り替えボタン */
         .branch-trigger {
             position: absolute;
             right: 20px;
@@ -154,8 +149,7 @@
         <span id="current-time">00:00:00</span>
     </div>
 
-    <div id="home-screen" class="screen">
-        </div>
+    <div id="home-screen" class="screen"></div>
 
     <div id="zaisen-screen" class="screen">
         <div id="station-list"></div>
@@ -164,7 +158,6 @@
     </div>
 
     <script>
-        // グローバル状態管理
         let systemNameMap = {};    
         let activeLayouts = {};    
         let stationsMap = {};      
@@ -188,19 +181,21 @@
             document.getElementById('current-time').innerText = now.toLocaleTimeString('ja-JP');
         }
 
-        // 改良版CSV解析関数（見えない改行コード \r や空白を完全に除去）
+        // CSVパース関数（BOM対策と余計な文字排除を徹底）
         function parseCSV(text) {
-            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+            // UTF-8のBOM(\ufeff)を削除
+            const cleanText = text.replace(/^\uFEFF/, '');
+            const lines = cleanText.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
             
-            // ヘッダー行の各項目から不要な空白や改行文字を削除
-            const headers = lines[0].split(',').map(h => h.replace(/\r$/, '').trim());
+            // ヘッダー行の各カラムの前後空白と\rを完全に除去
+            const headers = lines[0].split(',').map(h => h.replace(/[\r\n]/g, '').trim());
             
             return lines.slice(1).map(line => {
                 const values = line.split(',');
                 const obj = {};
                 headers.forEach((header, index) => {
-                    obj[header] = values[index] ? values[index].replace(/\r$/, '').trim() : '';
+                    obj[header] = values[index] ? values[index].replace(/[\r\n]/g, '').trim() : '';
                 });
                 return obj;
             });
@@ -225,7 +220,7 @@
             }
         }
 
-        // 2. info.csv の読み込みとボタン生成
+        // 2. info.csv の読み込みとボタン生成（キー自動検知型に強化）
         async function loadInfoAndGenerateButtons() {
             try {
                 const resInfo = await fetch('zaisen - info.csv');
@@ -236,10 +231,15 @@
                 homeScreen.innerHTML = '';
 
                 infoData.forEach(row => {
-                    const sysId = row['路線系統'];
-                    const sysName = row['路線系統表示名']; 
-                    
-                    if (!sysId) return; // 空行スキップ
+                    // キー名に部分一致するものを柔軟に探す（路線系統、路線系統表示名 等）
+                    const keys = Object.keys(row);
+                    const sysIdKey = keys.find(k => k.includes('路線系統') && !k.includes('名'));
+                    const sysNameKey = keys.find(k => k.includes('路線系統') && k.includes('名'));
+
+                    const sysId = row[sysIdKey];
+                    const sysName = row[sysNameKey] || sysId; 
+
+                    if (!sysId) return; // 空欄データはスキップ
 
                     systemNameMap[sysId] = sysName;
 
@@ -247,9 +247,10 @@
                         activeLayouts[sysId] = `${sysId}-1.csv`; 
                     }
 
+                    // ボタン生成
                     const btn = document.createElement('button');
                     btn.className = 'system-btn';
-                    btn.innerText = sysName || sysId; // 万が一空でもIDを表示
+                    btn.innerText = sysName;
                     btn.onclick = () => loadZaisen(sysId);
                     homeScreen.appendChild(btn);
                 });
@@ -298,7 +299,6 @@
             }
         }
 
-        // 時刻表CSV解析
         function parseTimetableCSV(text) {
             const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
             if (lines.length < 2) return [];
@@ -327,6 +327,8 @@
         // 5. 路線・駅図面のレンダリング
         async function renderRoute() {
             const layoutFile = activeLayouts[currentSystem];
+            if (!layoutFile) return;
+
             try {
                 const resLayout = await fetch(layoutFile);
                 const textLayout = await resLayout.text();
@@ -377,7 +379,7 @@
 
                 updateTrainPositions();
             } catch(e) {
-                console.error(`${layoutFile} の読み込みに失敗しました。ファイル名を確認してください。`, e);
+                console.error(`${layoutFile} の読み込みに失敗しました。`, e);
             }
         }
 
