@@ -10,6 +10,7 @@
             --sub-bg-color: #F8F8F8;
             --header-bg: #1C1C1C;
             --btn-color: #333333;
+            --row-height: 80px; /* 駅エリア・駅間エリアの基準高さ */
         }
 
         body {
@@ -44,7 +45,6 @@
             display: none;
         }
 
-        /* ハンバーガーメニューボタン */
         .menu-btn {
             width: 44px;
             height: 44px;
@@ -64,17 +64,10 @@
             transition: 0.3s;
         }
 
-        .menu-btn.active span:nth-child(1) {
-            transform: translateY(7px) rotate(45deg);
-        }
-        .menu-btn.active span:nth-child(2) {
-            opacity: 0;
-        }
-        .menu-btn.active span:nth-child(3) {
-            transform: translateY(-7px) rotate(-45deg);
-        }
+        .menu-btn.active span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+        .menu-btn.active span:nth-child(2) { opacity: 0; }
+        .menu-btn.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-        /* スライドナビゲーションメニュー */
         .nav-menu {
             position: fixed;
             top: 0;
@@ -87,9 +80,7 @@
             padding-top: 60px;
             box-shadow: -2px 0 10px rgba(0,0,0,0.5);
         }
-        .nav-menu.active {
-            right: 0;
-        }
+        .nav-menu.active { right: 0; }
         .nav-menu-item {
             padding: 20px;
             color: white;
@@ -99,11 +90,8 @@
             display: block;
             text-decoration: none;
         }
-        .nav-menu-item:active {
-            background: #444;
-        }
+        .nav-menu-item:active { background: #444; }
 
-        /* オーバーレイ */
         .menu-overlay {
             position: fixed;
             top: 0;
@@ -114,13 +102,9 @@
             display: none;
             z-index: 140;
         }
-        .menu-overlay.active {
-            display: block;
-        }
+        .menu-overlay.active { display: block; }
 
-        .screen {
-            padding: 20px;
-        }
+        .screen { padding: 20px; }
 
         #home-screen {
             display: flex;
@@ -142,10 +126,7 @@
             max-width: 400px;
             transition: opacity 0.2s;
         }
-
-        .system-btn:hover {
-            opacity: 0.9;
-        }
+        .system-btn:hover { opacity: 0.9; }
 
         #zaisen-screen {
             display: none;
@@ -153,39 +134,59 @@
             max-width: 600px;
             margin: 0 auto;
             padding: 0;
+            background-color: var(--bg-color); /* 駅間エリアはメイン背景色 */
         }
 
-        .railway-line-container {
-            position: absolute;
-            right: 120px;
-            top: 0;
-            bottom: 0;
-            width: 20px;
-            pointer-events: none;
-            z-index: 1;
-        }
-
-        .railway-line-segment {
-            width: 100%;
-            position: absolute;
+        /* 駅レイアウト構造 */
+        .station-block {
+            display: flex;
+            flex-direction: column;
+            position: relative;
         }
 
         .station-row {
             display: flex;
             align-items: center;
-            height: 80px;
-            position: relative;
-            background-color: var(--sub-bg-color);
-            margin-bottom: 2px;
+            height: var(--row-height);
+            background-color: var(--sub-bg-color); /* 駅エリアはサブ背景色 */
             border-bottom: 1px solid #e0e0e0;
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .between-row {
+            height: var(--row-height);
+            background-color: var(--bg-color); /* 駅間エリアはメイン背景色 */
+            position: relative;
         }
 
         .station-name {
-            width: 150px;
+            width: 180px;
             padding-left: 20px;
             font-weight: bold;
             font-size: 1.1rem;
             z-index: 2;
+        }
+
+        /* SVG配線レイヤー */
+        .railway-svg-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .train-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
         }
 
         .train-icon {
@@ -195,7 +196,6 @@
             background-image: url('unknown.png');
             background-size: contain;
             background-repeat: no-repeat;
-            z-index: 10;
             transition: all 0.5s linear;
         }
 
@@ -236,8 +236,8 @@
 
     <div id="zaisen-screen" class="screen">
         <div id="station-list"></div>
-        <div id="line-layer" class="railway-line-container"></div>
-        <div id="train-layer"></div>
+        <svg id="svg-layer" class="railway-svg-container"></svg>
+        <div id="train-layer" class="train-layer"></div>
     </div>
 
     <script>
@@ -249,6 +249,10 @@
         let currentSystem = '';     
         let currentStations = [];   
         let timetables = { in: [], out: [] }; 
+
+        // 線の基本X位置（中央やや右：画面幅600pxに対して400pxの位置）
+        const LINE_X = 400; 
+        const LINE_WIDTH = 20;
 
         setInterval(updateTrainPositions, 5000);
 
@@ -263,38 +267,14 @@
             document.getElementById('menu-overlay').classList.toggle('active');
         }
 
-        function pageReload() {
-            location.reload();
-        }
+        function pageReload() { location.reload(); }
 
         async function fetchGitHubCommits() {
             const updateEl = document.getElementById('last-update');
             try {
-                const pathParts = window.location.pathname.split('/').filter(p => p !== '');
-                const hostParts = window.location.hostname.split('.');
-                
-                if (hostParts[1] === 'github' && hostParts[2] === 'io') {
-                    const user = hostParts[0];
-                    const repo = pathParts[0];
-                    const apiUrl = `https://api.github.com/repos/${user}/${repo}/commits?per_page=1`;
-                    
-                    const res = await fetch(apiUrl);
-                    if (res.ok) {
-                        const commits = await res.json();
-                        if (commits && commits.length > 0) {
-                            const commitDate = new Date(commits[0].commit.committer.date);
-                            updateEl.innerText = '最終更新：' + commitDate.toLocaleTimeString('ja-JP');
-                            return;
-                        }
-                    }
-                }
                 const response = await fetch(window.location.href, { method: 'HEAD' });
                 const lastMod = response.headers.get('Last-Modified');
-                if (lastMod) {
-                    updateEl.innerText = '最終更新：' + new Date(lastMod).toLocaleTimeString('ja-JP');
-                } else {
-                    updateEl.innerText = '最終更新：' + new Date().toLocaleTimeString('ja-JP');
-                }
+                updateEl.innerText = '最終更新：' + (lastMod ? new Date(lastMod) : new Date()).toLocaleTimeString('ja-JP');
             } catch (e) {
                 updateEl.innerText = '最終更新：' + new Date().toLocaleTimeString('ja-JP');
             }
@@ -325,24 +305,11 @@
         }
 
         async function safeFetch(baseName) {
-            const namesToTry = [baseName];
-            if (baseName.startsWith('zaisen - ')) {
-                namesToTry.push(baseName.replace('zaisen - ', ''));
-            } else {
-                namesToTry.push(`zaisen - ${baseName}`);
-            }
-
-            for (let name of namesToTry) {
-                try {
-                    const encodedName = encodeURIComponent(name).replace(/%2F/g, '/');
-                    const res = await fetch(encodedName);
-                    if (res.ok) {
-                        return await res.text();
-                    }
-                } catch (e) {
-                    // ignore
-                }
-            }
+            try {
+                const encodedName = encodeURIComponent(baseName).replace(/%2F/g, '/');
+                const res = await fetch(encodedName);
+                if (res.ok) return await res.text();
+            } catch (e) {}
             throw new Error(`ファイルが見つかりません: ${baseName}`);
         }
 
@@ -350,18 +317,15 @@
             try {
                 const textStation = await safeFetch('zaisen - station_id.csv');
                 parseCSV(textStation).forEach(row => {
-                    const idKey = Object.keys(row).find(k => k.includes('駅ID'));
-                    const nameKey = Object.keys(row).find(k => k.includes('駅名'));
-                    if (idKey && nameKey) {
-                        stationsMap[row[idKey]] = row[nameKey];
+                    if (row['駅ID'] && row['駅名']) {
+                        stationsMap[row['駅ID']] = row['駅名'];
                     }
                 });
 
                 const textRail = await safeFetch('zaisen - railroad_id.csv');
                 parseCSV(textRail).forEach(row => {
-                    const idKey = Object.keys(row).find(k => k.includes('路線ID'));
-                    if (idKey && row[idKey]) {
-                        railroadMap[row[idKey]] = row;
+                    if (row['路線ID']) {
+                        railroadMap[row['路線ID']] = row;
                     }
                 });
             } catch (e) {
@@ -378,19 +342,12 @@
                 homeScreen.innerHTML = '';
 
                 infoData.forEach(row => {
-                    const keys = Object.keys(row);
-                    const sysIdKey = keys.find(k => k.includes('路線系統') && !k.includes('名') && !k.includes('表示'));
-                    const sysNameKey = keys.find(k => k.includes('路線系統') && (k.includes('名') || k.includes('表示')));
-
-                    if (!sysIdKey) return;
-
-                    const sysId = row[sysIdKey];
-                    const sysName = row[sysNameKey] || sysId;
-
+                    const sysId = row['路線系統'];
+                    const sysName = row['路線系統表示名'] || sysId;
                     if (!sysId) return;
 
                     systemNameMap[sysId] = sysName;
-
+                    // 枝番がある場合は自動的に「-1.csv」を選択
                     if (!activeLayouts[sysId]) {
                         activeLayouts[sysId] = `${sysId}-1.csv`; 
                     }
@@ -429,14 +386,20 @@
             const isHoliday = (now.getDay() === 0 || now.getDay() === 6);
             const dayKey = isHoliday ? 'h' : 'w';
 
-            try {
-                const textIn = await safeFetch(`jreja_${dayKey}_in.csv`);
-                timetables.in = parseTimetableCSV(textIn);
+            timetables.in = [];
+            timetables.out = [];
 
-                const textOut = await safeFetch(`jreja_${dayKey}_out.csv`);
-                timetables.out = parseTimetableCSV(textOut);
-            } catch (e) {
-                console.warn("時刻表ファイルが一部見つかりません:", e.message);
+            // マスタに登録されているすべての時刻表ID(路線ID)からデータを取得
+            const routeIds = Object.keys(railroadMap);
+            for (const routeId of routeIds) {
+                try {
+                    const textIn = await safeFetch(`${routeId}_${dayKey}_in.csv`);
+                    timetables.in = timetables.in.concat(parseTimetableCSV(textIn));
+                } catch (e) {}
+                try {
+                    const textOut = await safeFetch(`${routeId}_${dayKey}_out.csv`);
+                    timetables.out = timetables.out.concat(parseTimetableCSV(textOut));
+                } catch (e) {}
             }
         }
 
@@ -451,7 +414,7 @@
             for (let i = 1; i < lines.length; i++) {
                 const cols = lines[i].split(',');
                 const stationName = cols[0].trim();
-                const type = cols[1].trim();
+                const type = cols[1].trim(); // 「着」または「発」
                 
                 for (let j = 2; j < cols.length; j++) {
                     const timeStr = cols[j] ? cols[j].trim() : '';
@@ -475,19 +438,23 @@
                 currentStations = parseCSV(textLayout);
 
                 const stationListDiv = document.getElementById('station-list');
-                const lineLayerDiv = document.getElementById('line-layer');
+                const svgLayer = document.getElementById('svg-layer');
                 stationListDiv.innerHTML = '';
-                lineLayerDiv.innerHTML = '';
+                svgLayer.innerHTML = '';
+
+                // SVGの全幅・全高の設定
+                const totalHeight = currentStations.length * 160 - 80; 
+                svgLayer.setAttribute('height', totalHeight);
+                svgLayer.setAttribute('width', 600);
 
                 currentStations.forEach((row, index) => {
-                    const keys = Object.keys(row);
-                    const idKey = keys.find(k => k.includes('駅ID'));
-                    const railIdKey = keys.find(k => k.includes('路線ID'));
-                    
-                    if (!idKey || !row[idKey]) return; // 有効な駅IDがない行はスキップ
-                    
-                    const stationId = row[idKey];
+                    const stationId = row['駅ID'];
+                    if (!stationId) return;
                     const stationName = stationsMap[stationId] || stationId;
+
+                    // HTML構造の生成（駅エリア + 駅間エリア）
+                    const blockDiv = document.createElement('div');
+                    blockDiv.className = 'station-block';
 
                     const rowDiv = document.createElement('div');
                     rowDiv.className = 'station-row';
@@ -498,28 +465,79 @@
                     nameDiv.innerText = stationName;
                     rowDiv.appendChild(nameDiv);
 
+                    // 分岐ボタンの配置
                     if (row['表示先']) {
                         const btn = document.createElement('button');
                         btn.className = 'branch-trigger';
-                        btn.innerText = row['分岐方向'] === 'ir' ? '→ 相鉄直通線' : '← りんかい線';
+                        // 分岐方向に応じてラベルを切り替え
+                        const isRinkai = row['表示先'].includes('1');
+                        btn.innerText = isRinkai ? '← りんかい線方面' : '→ 相鉄線方面';
                         btn.onclick = () => {
                             activeLayouts[currentSystem] = `${row['表示先']}.csv`;
                             renderRoute(); 
                         };
                         rowDiv.appendChild(btn);
                     }
+                    blockDiv.appendChild(rowDiv);
 
-                    stationListDiv.appendChild(rowDiv);
+                    // 最終駅でなければ駅間エリアを追加
+                    if (index < currentStations.length - 1) {
+                        const betweenDiv = document.createElement('div');
+                        betweenDiv.className = 'between-row';
+                        blockDiv.appendChild(betweenDiv);
+                    }
+                    stationListDiv.appendChild(blockDiv);
 
-                    if (index < currentStations.length - 1 && railIdKey && row[railIdKey]) {
-                        const segment = document.createElement('div');
-                        segment.className = 'railway-line-segment';
-                        segment.style.top = `${(index * 83) + 40}px`;
-                        segment.style.height = `83px`;
-                        
-                        const railInfo = railroadMap[row[railIdKey]];
-                        segment.style.backgroundColor = railInfo ? railInfo['ラインカラー'] : '#999999';
-                        lineLayerDiv.appendChild(segment);
+                    // --- SVG配線描画ロジック ---
+                    const currentY = index * 160 + 40; // 駅の中心Y座標
+                    const railId = row['路線ID'];
+                    const railInfo = railroadMap[railId];
+                    const lineColor = railInfo ? railInfo['ラインカラー'] : '#999999';
+
+                    // 1. 駅エリア内の直線描画
+                    const stationLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    stationLine.setAttribute('x1', LINE_X);
+                    stationLine.setAttribute('y1', currentY - 40);
+                    stationLine.setAttribute('x2', LINE_X);
+                    stationLine.setAttribute('y2', currentY + 40);
+                    stationLine.setAttribute('stroke', lineColor);
+                    stationLine.setAttribute('stroke-width', LINE_WIDTH);
+                    svgLayer.appendChild(stationLine);
+
+                    // 2. 駅間（次駅への接続・分岐）の描画
+                    if (index < currentStations.length - 1) {
+                        const nextY = (index + 1) * 160 + 40;
+                        const branch = row['分岐方向']; // il, ic, ir, ol, oc, or
+
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        let d = '';
+
+                        if (branch) {
+                            // 分岐形状の生成
+                            const startY = currentY + 40;
+                            const endY = nextY - 40;
+                            if (branch === 'ir' || branch === 'or') {
+                                // 右へ分岐
+                                d = `M ${LINE_X} ${startY} Q ${LINE_X + 60} ${startY + 40}, ${LINE_X + 60} ${endY}`;
+                            } else if (branch === 'il' || branch === 'ol') {
+                                // 左へ分岐
+                                d = `M ${LINE_X} ${startY} Q ${LINE_X - 60} ${startY + 40}, ${LINE_X - 60} ${endY}`;
+                            } else if (branch === 'ic' || branch === 'oc') {
+                                // センター（直下・末端）
+                                d = `M ${LINE_X} ${startY} L ${LINE_X} ${endY}`;
+                            }
+                        } else {
+                            // 通常の直線接続
+                            d = `M ${LINE_X} ${currentY + 40} L ${LINE_X} ${nextY - 40}`;
+                        }
+
+                        if (d) {
+                            path.setAttribute('d', d);
+                            path.setAttribute('stroke', lineColor);
+                            path.setAttribute('stroke-width', LINE_WIDTH);
+                            path.setAttribute('fill', 'none');
+                            svgLayer.appendChild(path);
+                        }
                     }
                 });
 
@@ -546,20 +564,28 @@
             trainLayer.innerHTML = '';
 
             const nowSec = new Date().getTime() / 1000;
+            
+            // 位置の重複回避用カウンターオブジェクト
             const positionSlots = {};
 
             function registerAndRenderTrain(train, yPos, direction) {
-                const baseRight = direction === 'in' ? 130 : 80;
-                const slotKey = `${Math.round(yPos)}_${direction}`;
+                // 上りは線の左側、下りは線の右側
+                const baseLeft = direction === 'in' ? (LINE_X - 40) : (LINE_X + 15);
                 
+                // 重複判定用の丸めた位置キー
+                const slotKey = `${Math.round(yPos / 20) * 20}_${direction}`;
                 if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
-                const offset = positionSlots[slotKey] * 30; 
+                
+                // 重複している場合は横に28pxずつずらす
+                const offset = positionSlots[slotKey] * 28;
                 positionSlots[slotKey]++;
+
+                const finalLeft = direction === 'in' ? (baseLeft - offset) : (baseLeft + offset);
 
                 const icon = document.createElement('div');
                 icon.className = 'train-icon';
-                icon.style.top = `${yPos}px`;
-                icon.style.right = `${direction === 'in' ? baseRight + offset : baseRight - offset}px`;
+                icon.style.top = `${yPos - 12}px`; // アイコンの中心を合わせる
+                icon.style.left = `${finalLeft}px`;
                 icon.title = `列車番号: ${train.trainNo} (${direction === 'in' ? '上り' : '下り'})`;
                 trainLayer.appendChild(icon);
             }
@@ -568,14 +594,8 @@
                 const list = timetables[dir] || [];
                 list.forEach(train => {
                     for (let i = 0; i < currentStations.length; i++) {
-                        const keys = currentStations[i];
-                        if (!keys) continue;
-                        
-                        const idKey = Object.keys(keys).find(k => k.includes('駅ID'));
-                        if (!idKey || !keys[idKey]) continue;
-
-                        const stId = keys[idKey];
-                        const stName = stationsMap[stId];
+                        const stationId = currentStations[i]['駅ID'];
+                        const stName = stationsMap[stationId];
                         if (!stName) continue;
                         
                         const stopInfo = train.stops[stName];
@@ -583,33 +603,30 @@
 
                         const arrSec = timeToSeconds(stopInfo['着']);
                         const depSec = timeToSeconds(stopInfo['発']);
+                        const currentStationY = i * 160 + 40;
 
+                        // 1. 駅に停車中の判定
                         if (arrSec && depSec && nowSec >= arrSec && nowSec <= depSec) {
-                            const yPos = (i * 83) + 28;
-                            registerAndRenderTrain(train, yPos, dir);
+                            registerAndRenderTrain(train, currentStationY, dir);
                             return;
                         }
 
+                        // 2. 駅間を走行中の判定
                         if (i < currentStations.length - 1) {
-                            const nextKeys = currentStations[i+1];
-                            if (!nextKeys) continue;
-                            
-                            const nextIdKey = Object.keys(nextKeys).find(k => k.includes('駅ID'));
-                            if (!nextIdKey || !nextKeys[nextIdKey]) continue;
-
-                            const nextStId = nextKeys[nextIdKey];
-                            const nextStName = stationsMap[nextStId];
+                            const nextStationId = currentStations[i+1]['駅ID'];
+                            const nextStName = stationsMap[nextStationId];
                             if (!nextStName) continue;
                             
                             const nextStopInfo = train.stops[nextStName];
-
                             if (nextStopInfo && depSec) {
                                 const nextArrSec = timeToSeconds(nextStopInfo['着']);
                                 if (nextArrSec && nowSec > depSec && nowSec < nextArrSec) {
+                                    // 走行比率の計算
                                     const ratio = (nowSec - depSec) / (nextArrSec - depSec);
-                                    const startY = (i * 83) + 28;
-                                    const endY = ((i + 1) * 83) + 28;
-                                    const yPos = startY + (endY - startY) * ratio;
+                                    const nextStationY = (i + 1) * 160 + 40;
+                                    
+                                    // Y座標を駅間エリア内で線形補間
+                                    const yPos = currentStationY + (nextStationY - currentStationY) * ratio;
 
                                     registerAndRenderTrain(train, yPos, dir);
                                     return;
