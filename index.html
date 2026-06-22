@@ -1,4 +1,3 @@
-<!-- 2026/06/22 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -11,7 +10,6 @@
             --sub-bg-color: #F8F8F8;   
             --header-bg: #1C1C1C;
             --btn-color: #333333;
-            /* 高さを従来の7割に縮小 (80px * 0.7 = 56px) */
             --row-height: 56px; 
         }
 
@@ -178,7 +176,7 @@
 
         .station-name {
             font-weight: bold;
-            font-size: 0.95rem; /* 駅名表示を少し小さく変更 */
+            font-size: 0.95rem;
             color: #333;
             white-space: nowrap;
             overflow: hidden;
@@ -219,6 +217,7 @@
             z-index: 10;
         }
 
+        /* 【要件】アニメーション（transition）を一切持たせないアイコン定義 */
         .train-icon {
             position: absolute;
             width: 24px;
@@ -226,7 +225,6 @@
             background-image: url('icon/unknown.png');
             background-size: contain;
             background-repeat: no-repeat;
-            /* アニメーション用のtransitionを削除 */
         }
 
         .branch-clickable-container {
@@ -319,23 +317,26 @@
         let currentStations = [];
         let timetables = { in: [], out: [] }; 
 
-        // 7割の高さに変更したため、1ブロックあたりの高さを112px（56px * 2）に設定
         const BLOCK_HEIGHT = 112;
         const ROW_HALF_HEIGHT = 28;
-
         function getLineX() {
             const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
             return screenWidth * 0.70;
         }
         
         const LINE_WIDTH = 20;
+
+        // 【要件】一度読み取ったか管理するキャッシュ状態フラグ
+        let isTimetablesLoaded = false;
+        // 【要件】アプリ起動時に一回だけ保持するスケジュール区分（w: 平日, h: 土休日）
+        let globalDayKey = 'w';
+
         window.onresize = () => {
             if (document.getElementById('zaisen-screen').style.display === 'block') {
                 renderRoute();
             }
         };
 
-        // 毎分0秒に同期して更新処理をループさせる関数
         function syncUpdateLoop() {
             updateTrainPositions();
             const now = new Date();
@@ -347,8 +348,19 @@
 
         window.onload = async () => {
             await fetchGitHubCommits();
+            
+            // 【要件】アプリを開いた時に平日、休日、祝日判定をあらかじめ終わらせておく
+            let now = new Date();
+            if (now.getHours() < 4) {
+                now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            }
+            const isHolidayAPI = await checkIsHolidayAPI(now);
+            const isWeekend = (now.getDay() === 0 || now.getDay() === 6);
+            globalDayKey = (isWeekend || isHolidayAPI) ? 'h' : 'w';
+            console.log(`[初期化] カレンダー判定完了。本日の基準ダイヤ区分: ${globalDayKey}`);
+
             await initApp();
-            syncUpdateLoop(); // 毎分0秒同期のループを開始
+            syncUpdateLoop();
         };
 
         function toggleMenu() {
@@ -448,7 +460,7 @@
                     if (!sysId) return;
 
                     systemNameMap[sysId] = sysName;
-                     
+                                    
                     if (!activeLayouts[sysId]) {
                         activeLayouts[sysId] = `display/${sysId}-1.csv`; 
                     }
@@ -514,17 +526,15 @@
             document.getElementById('back-button').style.display = 'none';
         }
 
-        // 内閣府のAPI(CSV)から祝日データを取得して判定する関数
         async function checkIsHolidayAPI(targetDate) {
             try {
                 const res = await fetch('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv');
                 if (!res.ok) return false;
                 const buffer = await res.arrayBuffer();
-                const decoder = new TextDecoder('shift-jis'); // 内閣府CSVはShift-JIS
+                const decoder = new TextDecoder('shift-jis');
                 const text = decoder.decode(buffer);
                 const lines = text.split('\n');
                 
-                // YYYY/M/D または YYYY/MM/DD の形式を合わせる
                 const ty = targetDate.getFullYear();
                 const tm = targetDate.getMonth() + 1;
                 const td = targetDate.getDate();
@@ -547,20 +557,17 @@
         }
 
         async function loadTimetables() {
+            // 【要件】一度読み取った時刻表はディスプレイを切り替えても読み取らない（再読込スキップ）
+            if (isTimetablesLoaded) {
+                console.log("[キャッシュ利用] 時刻表データは既に全路線ロード済みです。フェッチをスキップします。");
+                return;
+            }
+
             let now = new Date();
-            
-            // 【4時基準の1日概念ロジック】
-            // 朝4時より前（0:00〜3:59）であれば、前日の日付として処理する
             if (now.getHours() < 4) {
                 now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             }
-
-            // 内閣府データから祝日かどうかの判定を取得
-            const isHolidayAPI = await checkIsHolidayAPI(now);
-            const isWeekend = (now.getDay() === 0 || now.getDay() === 6);
             
-            // 土曜日・日曜日、または祝日の場合は休日ダイヤ('h')、それ以外は平日ダイヤ('w')
-            let dayKey = (isWeekend || isHolidayAPI) ? 'h' : 'w';
             timetables.in = [];
             timetables.out = [];
 
@@ -585,7 +592,9 @@
                 const systemRules = calendarData.filter(row => row['路線系統'] === sysFolder);
 
                 let activeTimetableDate = '';
-                let finalDayKey = dayKey;
+                // 画面を切り替える毎の動的判定をやめ、初期化時に確定させたglobalDayKeyを基準に使用
+                let finalDayKey = globalDayKey; 
+
                 const defaultRule = systemRules.find(row => !row['開始日'] && !row['終了日']);
                 if (defaultRule) {
                     activeTimetableDate = defaultRule['改正日'];
@@ -623,6 +632,9 @@
                     console.warn(`下り時刻表の読み込みスキップ: ${filePrefix}_${finalDayKey} (${folderPath})`, e.message);
                 }
             }
+
+            // 初回全読み込みが完了したためキャッシュフラグを確定
+            isTimetablesLoaded = true;
         }
 
         function parseTimetableCSV(text) {
@@ -669,13 +681,10 @@
                 stationListDiv.innerHTML = '';
                 svgLayer.innerHTML = '';
                 clickableLayer.innerHTML = '';
-                
-                // 高さ縮小に伴い全体の高さを再計算
                 const totalHeight = currentStations.length * BLOCK_HEIGHT - ROW_HALF_HEIGHT * 2; 
                 svgLayer.setAttribute('height', totalHeight);
                 svgLayer.setAttribute('width', screenWidth);
                 svgLayer.setAttribute('viewBox', `0 0 ${screenWidth} ${totalHeight}`);
-                
                 currentStations.forEach((row, index) => {
                     const stationId = row['駅ID'];
                     if (!stationId) return;
@@ -697,7 +706,7 @@
                     
                     const dotIcon = document.createElement('div');
                     dotIcon.className = 'station-icon-dot';
-                    dotIcon.innerText = '＞'; // 半角の「>」から全角の「＞」に変更
+                    dotIcon.innerText = '＞';
 
                     nameContainer.appendChild(nameDiv);
                     nameContainer.appendChild(dotIcon);
@@ -710,7 +719,6 @@
                         blockDiv.appendChild(betweenDiv);
                     }
                     stationListDiv.appendChild(blockDiv);
-                    
                     const currentY = index * BLOCK_HEIGHT + ROW_HALF_HEIGHT; 
                     
                     const currentRailId = row['路線ID'];
@@ -748,7 +756,8 @@
                             } else if (branch === 'ir') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L ${screenWidth} ${currentY - ROW_HALF_HEIGHT}`;
                                 textX = lineX + 40; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
-                                zoneLeft = lineX; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
+                                zoneLeft = lineX;
+                                zoneTop = currentY - ROW_HALF_HEIGHT - 20;
                                 zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             } else if (branch === 'ol') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L 0 ${currentY + ROW_HALF_HEIGHT}`;
@@ -800,11 +809,12 @@
                         }
                     }
 
-                    // ●から〇に変えるため、fillを#FFFFFF(白)、strokeを#000000(黒)に変更
+                    // 【要件】駅の◯の直径を線の幅と同じにする
                     const stationDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     stationDot.setAttribute('cx', lineX);
                     stationDot.setAttribute('cy', currentY);
-                    stationDot.setAttribute('r', '14'); 
+                    // LINE_WIDTHが20のため、半径(r)を10に設定することで直径が完全に一致します
+                    stationDot.setAttribute('r', (LINE_WIDTH / 2).toString()); 
                     stationDot.setAttribute('fill', '#FFFFFF'); 
                     stationDot.setAttribute('stroke', '#000000');
                     stationDot.setAttribute('stroke-width', '3');
@@ -817,7 +827,6 @@
             }
         }
 
-        // 4時基準の1日を跨ぐタイムスタンプを秒に変換するロジック
         function timeToSeconds(timeStr) {
             if (!timeStr) return null;
             const clean = timeStr.replace(':', '').trim();
@@ -827,61 +836,89 @@
             const m = parseInt(clean.substring(clean.length - 2), 10);
             
             let now = new Date();
-            // 現在時刻が4時未満なら基準日を1日前として扱う
             if (now.getHours() < 4) {
                 now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             }
-            
-            // 時刻表の時間が4時未満（24時以降など含む）かつ現在の実際の時間が深夜帯のケースなどの調整
+
             let targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
             return targetDate.getTime() / 1000;
         }
 
-       function updateTrainPositions() {
-    if (!currentStations || !currentStations.length) return;
-    const trainLayer = document.getElementById('train-layer');
-    if (!trainLayer) return;
-    trainLayer.innerHTML = '';
+        // 【要件】ご提示いただいた「順方向・逆方向」の厳格な在線タイムラインを完全に再現するロジック
+        function updateTrainPositions() {
+            if (!currentStations || !currentStations.length) return;
+            const trainLayer = document.getElementById('train-layer');
+            if (!trainLayer) return;
+            trainLayer.innerHTML = '';
 
-    const nowSec = new Date().getTime() / 1000;
-    const lineX = getLineX();
+            const nowSec = new Date().getTime() / 1000;
+            const lineX = getLineX();
 
-    ['in', 'out'].forEach(dir => {
-        (timetables[dir] || []).forEach(train => {
-            let prevTime = null;
-            let prevY = null;
-
-            for (let i = 0; i < currentStations.length; i++) {
-                const stName = stationsMap[currentStations[i]['駅ID']];
-                const stop = train.stops[stName];
-                // 到着か発車があればその時刻を採用
-                const time = stop ? (timeToSeconds(stop['着']) || timeToSeconds(stop['発'])) : null;
-                const currentY = i * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
-
-                if (time) {
-                    // 「現在時刻が前の駅時刻と今の駅時刻の間」にあるなら、その区間を描画
-                    if (prevTime !== null && nowSec >= prevTime && nowSec < time) {
-                        const ratio = (nowSec - prevTime) / (time - prevTime);
-                        const yPos = prevY + (currentY - prevY) * ratio;
-                        renderTrainIcon(train, yPos, dir, lineX);
-                        return; // この列車は描画済み
-                    }
-                    
-                    // 現在時刻がちょうど駅の時刻なら、その駅に描画
-                    if (Math.abs(nowSec - time) < 30) {
-                         renderTrainIcon(train, currentY, dir, lineX);
-                         return;
+            ['in', 'out'].forEach(dir => {
+                (timetables[dir] || []).forEach(train => {
+                    // 1. 運行方向（out: 上から下, in: 下から上）に応じて走査する駅の物理順序リストを作成
+                    let orderedRoute = [];
+                    if (dir === 'out') {
+                        for (let i = 0; i < currentStations.length; i++) {
+                            orderedRoute.push({ idx: i, st: currentStations[i] });
+                        }
+                    } else {
+                        for (let i = currentStations.length - 1; i >= 0; i--) {
+                            orderedRoute.push({ idx: i, st: currentStations[i] });
+                        }
                     }
 
-                    prevTime = time;
-                    prevY = currentY;
-                }
-            }
-        });
-    });
-}
+                    // 2. ルートに沿って、有効な時刻を持つ駅ポイントを順次抽出・論理補完
+                    let points = [];
+                    orderedRoute.forEach(item => {
+                        const stName = stationsMap[item.st['駅ID']];
+                        if (!stName) return;
+                        const stop = train.stops[stName];
+                        if (!stop) return;
 
-        // アイコン描画用ヘルパー関数（これを下に追加してください）
+                        let arr = timeToSeconds(stop['着']);
+                        let dep = timeToSeconds(stop['発']);
+
+                        // 到着・発車時間の片方しか定義がない場合の補完
+                        if (arr === null && dep !== null) arr = dep;
+                        if (dep === null && arr !== null) arr = dep;
+
+                        if (arr !== null || dep !== null) {
+                            points.push({
+                                idx: item.idx,
+                                arrSec: arr,
+                                depSec: dep,
+                                y: item.idx * BLOCK_HEIGHT + ROW_HALF_HEIGHT
+                            });
+                        }
+                    });
+
+                    // 3. 現在時刻（nowSec）に基づき、「駅にいるか」「駅間にいるか」を厳格に割り出し（アニメーションなし）
+                    for (let k = 0; k < points.length; k++) {
+                        const current = points[k];
+
+                        // 駅判定: 到着時刻 <= now < 発車時刻
+                        if (nowSec >= current.arrSec && nowSec < current.depSec) {
+                            renderTrainIcon(train, current.y, dir, lineX);
+                            return; 
+                        }
+
+                        // 駅間判定: 発車時刻 <= now < 次の有効駅の到着時刻
+                        if (k < points.length - 1) {
+                            const next = points[k + 1];
+                            if (nowSec >= current.depSec && nowSec < next.arrSec) {
+                                // アニメーションを一切挟まず、現在時刻の比率に準じた座標へジャストで配置
+                                const ratio = (nowSec - current.depSec) / (next.arrSec - current.depSec);
+                                const yPos = current.y + (next.y - current.y) * ratio;
+                                renderTrainIcon(train, yPos, dir, lineX);
+                                return; 
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
         function renderTrainIcon(train, yPos, dir, lineX) {
             const icon = document.createElement('div');
             icon.className = 'train-icon';
