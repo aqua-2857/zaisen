@@ -838,48 +838,48 @@
         }
 
        function updateTrainPositions() {
-            if (!currentStations || !currentStations.length) return;
-            const trainLayer = document.getElementById('train-layer');
-            if (!trainLayer) return;
-            trainLayer.innerHTML = '';
+    if (!currentStations || !currentStations.length) return;
+    const trainLayer = document.getElementById('train-layer');
+    if (!trainLayer) return;
+    trainLayer.innerHTML = '';
 
-            const nowSec = new Date().getTime() / 1000;
-            const lineX = getLineX();
+    const nowSec = new Date().getTime() / 1000;
+    const lineX = getLineX();
 
-            ['in', 'out'].forEach(dir => {
-                (timetables[dir] || []).forEach(train => {
-                    for (let i = 0; i < currentStations.length; i++) {
-                        const stName = stationsMap[currentStations[i]['駅ID']];
-                        if (!stName || !train.stops[stName]) continue;
+    ['in', 'out'].forEach(dir => {
+        (timetables[dir] || []).forEach(train => {
+            let prevTime = null;
+            let prevY = null;
 
-                        const stop = train.stops[stName];
-                        const arrSec = timeToSeconds(stop['着']);
-                        const depSec = timeToSeconds(stop['発']);
-                        const currentY = i * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
+            for (let i = 0; i < currentStations.length; i++) {
+                const stName = stationsMap[currentStations[i]['駅ID']];
+                const stop = train.stops[stName];
+                // 到着か発車があればその時刻を採用
+                const time = stop ? (timeToSeconds(stop['着']) || timeToSeconds(stop['発'])) : null;
+                const currentY = i * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
 
-                        // 1. 駅にいるか判定 (到着<=now<発車)
-                        if (arrSec && depSec && nowSec >= arrSec && nowSec < depSec) {
-                            renderTrainIcon(train, currentY, dir, lineX);
-                            return;
-                        }
-
-                        // 2. 駅間にいるか判定 (発車<=now<次駅の到着)
-                        if (i < currentStations.length - 1) {
-                            const nextStName = stationsMap[currentStations[i + 1]['駅ID']];
-                            const nextStop = train.stops[nextStName];
-                            if (nextStop && depSec) {
-                                const nextArrSec = timeToSeconds(nextStop['着'] || nextStop['発']);
-                                if (nextArrSec && nowSec >= depSec && nowSec < nextArrSec) {
-                                    const nextY = (i + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
-                                    renderTrainIcon(train, currentY + (nextY - currentY) * 0.5, dir, lineX);
-                                    return;
-                                }
-                            }
-                        }
+                if (time) {
+                    // 「現在時刻が前の駅時刻と今の駅時刻の間」にあるなら、その区間を描画
+                    if (prevTime !== null && nowSec >= prevTime && nowSec < time) {
+                        const ratio = (nowSec - prevTime) / (time - prevTime);
+                        const yPos = prevY + (currentY - prevY) * ratio;
+                        renderTrainIcon(train, yPos, dir, lineX);
+                        return; // この列車は描画済み
                     }
-                });
-            });
-        }
+                    
+                    // 現在時刻がちょうど駅の時刻なら、その駅に描画
+                    if (Math.abs(nowSec - time) < 30) {
+                         renderTrainIcon(train, currentY, dir, lineX);
+                         return;
+                    }
+
+                    prevTime = time;
+                    prevY = currentY;
+                }
+            }
+        });
+    });
+}
 
         // アイコン描画用ヘルパー関数（これを下に追加してください）
         function renderTrainIcon(train, yPos, dir, lineX) {
