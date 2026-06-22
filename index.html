@@ -880,41 +880,7 @@
                         let arrSec = timeToSeconds(stopInfo['着']);
                         let depSec = timeToSeconds(stopInfo['発']);
                         
-                        // 到着時刻が設定されていない場合は、発車時刻を基準にする
-                        if (!arrSec && depSec) arrSec = depSec;
-
-                        const currentStationY = i * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
-
-                        // 【条件1: 駅にいる】 A駅到着時刻 <= now < A駅発車時刻
-                        if (arrSec && depSec && nowSec >= arrSec && nowSec < depSec) {
-                            registerAndRenderTrain(train, currentStationY, dir);
-                            return;
-                        }
-
-                        // 【条件2: 駅間にいる】 A駅発車時刻 <= now < B駅到着時刻
-                        if (i < currentStations.length - 1) {
-                            const nextStationId = currentStations[i+1]['駅ID'];
-                            const nextStName = stationsMap[nextStationId];
-                            if (!nextStName) continue;
-                            
-                            const nextStopInfo = train.stops[nextStName];
-                            if (nextStopInfo && depSec) {
-                                let nextArrSec = timeToSeconds(nextStopInfo['着']);
-                                let nextDepSec = timeToSeconds(nextStopInfo['発']);
-                                
-                                // 次の駅の到着時刻が取得できない時は発車時刻を使う
-                                if (!nextArrSec && nextDepSec) nextArrSec = nextDepSec;
-
-                                if (nextArrSec && nowSec >= depSec && nowSec < nextArrSec) {
-                                    // アニメーションなし・中央固定（駅と駅のちょうど真ん中：0.5）
-                                    const nextStationY = (i + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
-                                    const yPos = currentStationY + (nextStationY - currentStationY) * 0.5;
-                                    registerAndRenderTrain(train, yPos, dir);
-                                    return;
-                                }
-                            }
-                        }
-                        // updateTrainPositions内のループの中にこれを挿入
+                      // updateTrainPositions内のループの中にこれを挿入
 if (nowSec >= arrSec && nowSec < depSec) {
     // 駅にいる
     registerAndRenderTrain(train, currentStationY, dir);
