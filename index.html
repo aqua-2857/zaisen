@@ -914,6 +914,20 @@
                                 }
                             }
                         }
+                        // updateTrainPositions内のループの中にこれを挿入
+if (nowSec >= arrSec && nowSec < depSec) {
+    // 駅にいる
+    registerAndRenderTrain(train, currentStationY, dir);
+    return;
+} else if (nowSec >= depSec && nowSec < nextArrSec) {
+    // 間にいる
+    // ...
+    return;
+} else {
+    // 【ここが重要！】ここに来ているということは、
+    // 現在時刻がどの条件にも当てはまらない「時刻表の隙間」にいる列車です
+    console.log(`列車 ${train.trainNo} が範囲外です: 現在=${new Date(nowSec*1000).toLocaleTimeString()}, 発=${depSec}, 着=${nextArrSec}`);
+}
                     }
                 });
             });
