@@ -844,7 +844,6 @@
             return targetDate.getTime() / 1000;
         }
 
-        // 【要件】ご提示いただいた「順方向・逆方向」の厳格な在線タイムラインを完全に再現するロジック
         function updateTrainPositions() {
             if (!currentStations || !currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
@@ -856,19 +855,13 @@
 
             ['in', 'out'].forEach(dir => {
                 (timetables[dir] || []).forEach(train => {
-                    // 1. 運行方向（out: 上から下, in: 下から上）に応じて走査する駅の物理順序リストを作成
                     let orderedRoute = [];
                     if (dir === 'out') {
-                        for (let i = 0; i < currentStations.length; i++) {
-                            orderedRoute.push({ idx: i, st: currentStations[i] });
-                        }
+                        for (let i = 0; i < currentStations.length; i++) orderedRoute.push({ idx: i, st: currentStations[i] });
                     } else {
-                        for (let i = currentStations.length - 1; i >= 0; i--) {
-                            orderedRoute.push({ idx: i, st: currentStations[i] });
-                        }
+                        for (let i = currentStations.length - 1; i >= 0; i--) orderedRoute.push({ idx: i, st: currentStations[i] });
                     }
 
-                    // 2. ルートに沿って、有効な時刻を持つ駅ポイントを順次抽出・論理補完
                     let points = [];
                     orderedRoute.forEach(item => {
                         const stName = stationsMap[item.st['駅ID']];
@@ -878,8 +871,6 @@
 
                         let arr = timeToSeconds(stop['着']);
                         let dep = timeToSeconds(stop['発']);
-
-                        // 到着・発車時間の片方しか定義がない場合の補完
                         if (arr === null && dep !== null) arr = dep;
                         if (dep === null && arr !== null) arr = dep;
 
@@ -893,24 +884,23 @@
                         }
                     });
 
-                    // 3. 現在時刻（nowSec）に基づき、「駅にいるか」「駅間にいるか」を厳格に割り出し（アニメーションなし）
+                    // 【変更】細かい動きを排除し、エリアごとの固定表示に変更
                     for (let k = 0; k < points.length; k++) {
                         const current = points[k];
 
-                        // 駅判定: 到着時刻 <= now < 発車時刻
+                        // 1. 駅停車中判定 (到着〜発車)
                         if (nowSec >= current.arrSec && nowSec < current.depSec) {
                             renderTrainIcon(train, current.y, dir, lineX);
                             return; 
                         }
 
-                        // 駅間判定: 発車時刻 <= now < 次の有効駅の到着時刻
+                        // 2. 駅間走行中判定 (発車〜次の駅の到着)
                         if (k < points.length - 1) {
                             const next = points[k + 1];
                             if (nowSec >= current.depSec && nowSec < next.arrSec) {
-                                // アニメーションを一切挟まず、現在時刻の比率に準じた座標へジャストで配置
-                                const ratio = (nowSec - current.depSec) / (next.arrSec - current.depSec);
-                                const yPos = current.y + (next.y - current.y) * ratio;
-                                renderTrainIcon(train, yPos, dir, lineX);
+                                // 駅と駅のちょうど真ん中の座標で固定
+                                const midY = (current.y + next.y) / 2;
+                                renderTrainIcon(train, midY, dir, lineX);
                                 return; 
                             }
                         }
