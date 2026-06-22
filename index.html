@@ -512,49 +512,38 @@
        
 
 async function loadTimetables() {
-    console.log("--- 時刻表読み込みを開始します ---");
+    console.log("--- 時刻表読み込みを開始します（高速化モード） ---");
     const now = new Date();
     const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${yyyy}-${mm}-${dd}`;
-
-    timetables.in = [];
-    timetables.out = [];
-
-    // 1. カレンダーCSV読み込み
+    
+    // 曜日・祝日判定は共通のため先に行う
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    let isHoliday = (now.getDay() === 0 || now.getDay() === 6);
+    
+    // カレンダー読み込み
     let calendarData = [];
     try {
         const textCalendar = await safeFetch('zaisen - calendar.csv');
         calendarData = parseCSV(textCalendar);
-        console.log("カレンダーCSV読み込み成功");
-    } catch (e) {
-        console.warn("カレンダーCSV読み込み失敗（デフォルトで動作）");
-    }
+    } catch (e) { console.warn("カレンダーCSVなし"); }
 
-    // 2. 祝日判定（ロジックは前回同様）
-    let isHoliday = (now.getDay() === 0 || now.getDay() === 6);
-    let dayKey = isHoliday ? 'h' : 'w';
-    console.log("曜日判定: " + dayKey);
-
-    // 3. 路線ごとのファイル読み込み（デバッグログを追加）
     const routeIds = Object.keys(railroadMap);
-    for (const routeId of routeIds) {
+
+    // 【高速化】全路線を「同時」に読み込むタスクを作成
+    const loadTasks = routeIds.map(async (routeId) => {
         const routeMaster = railroadMap[routeId];
-        if (!routeMaster) continue;
+        if (!routeMaster) return;
 
         const sysFolder = routeMaster['路線系統'] || 'saikyo';
         const filePrefix = routeMaster['時刻表ID'] || routeId;
         const systemRules = (Array.isArray(calendarData) ? calendarData : []).filter(r => r && r['路線系統'] === sysFolder);
 
+        // 改正日等の判定
         let activeDate = '2026-03-14';
-        let finalKey = dayKey;
+        let finalKey = isHoliday ? 'h' : 'w';
 
-        // ルール判定処理
         const defaultRule = systemRules.find(r => !r['開始日'] && !r['終了日']);
         if (defaultRule && defaultRule['改正日']) activeDate = defaultRule['改正日'];
-        
         for (const r of systemRules) {
             if (r['開始日'] && r['終了日']) {
                 const start = new Date(r['開始日']).getTime();
@@ -566,69 +555,35 @@ async function loadTimetables() {
             }
         }
 
-        // ここが重要：実際に探しているURLを全部表示させる
         const path = `zaisen/railroad/${sysFolder}/${activeDate}`;
-        const inUrl = `${path}/${filePrefix}_${finalKey}_in.csv`;
-        const outUrl = `${path}/${filePrefix}_${finalDayKey || finalKey}_out.csv`; // ※修正: finalDayKeyの代わりにfinalKey
+        const urls = [`${path}/${filePrefix}_${finalKey}_in.csv`, `${path}/${filePrefix}_${finalKey}_out.csv`];
 
-        console.log("アクセス中: " + inUrl);
-        
-        try {
-            const inCsv = await safeFetch(inUrl);
-            if (inCsv) {
-                timetables.in = timetables.in.concat(parseTimetableCSV(inCsv));
-                console.log("成功: " + inUrl);
-            }
-        } catch (e) {
-            console.error("失敗: " + inUrl);
+        // 2つのファイルを同時にFetch
+        const [inData, outData] = await Promise.all(
+            urls.map(url => safeFetch(url).catch(() => null))
+        );
+
+        if (inData) {
+            const parsed = parseTimetableCSV(inData);
+            timetables.in = timetables.in.concat(parsed);
+            console.log(`成功: ${urls[0]}`);
+        } else {
+            console.error(`失敗: ${urls[0]}`);
         }
 
-        try {
-            const outCsv = await safeFetch(outUrl);
-            if (outCsv) {
-                timetables.out = timetables.out.concat(parseTimetableCSV(outCsv));
-                console.log("成功: " + outUrl);
-            }
-        } catch (e) {
-            console.error("失敗: " + outUrl);
+        if (outData) {
+            const parsed = parseTimetableCSV(outData);
+            timetables.out = timetables.out.concat(parsed);
+            console.log(`成功: ${urls[1]}`);
+        } else {
+            console.error(`失敗: ${urls[1]}`);
         }
-    }
+    });
+
+    // 全ての路線読み込みが終わるのを待つ
+    await Promise.all(loadTasks);
+    console.log("--- 全路線の読み込み完了 ---");
 }
-      function parseTimetableCSV(text) {
-    const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
-    const lines = cleanText.split('\n').filter(l => l.trim() !== '');
-    if (lines.length < 6) return [];
-
-    const trainNumbers = lines[0].split(',').slice(2);
-    const trains = trainNumbers.map(num => ({ trainNo: num.trim(), stops: {} }));
-
-    for (let i = 5; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
-        if (cols.length < 3) continue;
-
-        const stationName = cols[0];
-        const type = cols[1];       
-
-        if (!stationName || (type !== '着' && type !== '発')) continue;
-
-       
-        for (let j = 2; j < cols.length; j++) {
-            const timeStr = cols[j];
-            if (timeStr && trains[j - 2]) {
-               
-                if (!trains[j - 2].stops[stationName]) {
-                    trains[j - 2].stops[stationName] = {};
-                }
-               
-                trains[j - 2].stops[stationName][type] = timeStr;
-            }
-        }
-    }
-
-   
-    return trains.filter(t => t.trainNo !== '');
-}
-
         async function renderRoute() {
             const layoutFile = activeLayouts[currentSystem];
             if (!layoutFile) return;
