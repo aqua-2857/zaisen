@@ -553,29 +553,30 @@ async function loadTimetables() {
     　  const path = `railroad/${sysFolder}/${activeDate}`;
         const urls = [`${path}/${filePrefix}_${finalKey}_in.csv`, `${path}/${filePrefix}_${finalKey}_out.csv`];
 
-        // (loadTimetables 関数内の一部を修正)
-        for (const url of urls) {
-            try {
-                const data = await safeFetch(url);
-                if (data && data.length > 0) {
-                    // ★ここをチェック：読み取ったデータの中身を出力
-                    console.log("読み取った生データ: " + url, data.substring(0, 200)); 
-                    
-                    const parsed = parseTimetableCSV(data);
-                    if (parsed.length > 0) {
-                        if (url.includes('_in.csv')) timetables.in = timetables.in.concat(parsed);
-                        else timetables.out = timetables.out.concat(parsed);
-                        console.log("【成功】取得完了: " + url + " (行数: " + parsed.length + ")");
-                    } else {
-                        console.warn("【空】取得できたがデータなし: " + url);
-                    }
-                } else {
-                    console.warn("【エラー】取得失敗かデータなし: " + url);
-                }
-            } catch (e) {
-                console.error("【通信失敗】: " + url);
-            }
+      // loadTimetables内のループ部分
+for (const url of urls) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.error("【エラー】取得失敗 (Status: " + response.status + "): " + url);
+            continue;
         }
+        const data = await response.text();
+        
+        // ここで空かどうかをチェックしてログに出す
+        if (data.trim().length === 0) {
+            console.warn("【警告】ファイルが空です: " + url);
+        } else {
+            console.log("【成功】取得完了 (" + data.length + "文字): " + url);
+            // 成功した場合のみパース処理へ進む
+            const parsed = parseTimetableCSV(data);
+            if (url.includes('_in.csv')) timetables.in = timetables.in.concat(parsed);
+            else timetables.out = timetables.out.concat(parsed);
+        }
+    } catch (e) {
+        console.error("【通信失敗】: " + url, e);
+    }
+}
     });
 
     await Promise.all(loadTasks);
