@@ -517,7 +517,7 @@
         // 内閣府のAPI(CSV)から祝日データを取得して判定する関数
         async function checkIsHolidayAPI(targetDate) {
             try {
-                const res = await fetch('https://www8.cao.go.jp/chousei/shukujitsu/syukujitsu.csv');
+                const res = await fetch('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv');
                 if (!res.ok) return false;
                 const buffer = await res.arrayBuffer();
                 const decoder = new TextDecoder('shift-jis'); // 内閣府CSVはShift-JIS
