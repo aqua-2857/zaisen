@@ -512,15 +512,12 @@
        
 
 async function loadTimetables() {
-    console.log("--- 時刻表読み込みを開始します（高速化モード） ---");
+    console.log("--- 調査開始 ---");
     const now = new Date();
     const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    
-    // 曜日・祝日判定は共通のため先に行う
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     let isHoliday = (now.getDay() === 0 || now.getDay() === 6);
-    
-    // カレンダー読み込み
+
     let calendarData = [];
     try {
         const textCalendar = await safeFetch('zaisen - calendar.csv');
@@ -529,7 +526,6 @@ async function loadTimetables() {
 
     const routeIds = Object.keys(railroadMap);
 
-    // 【高速化】全路線を「同時」に読み込むタスクを作成
     const loadTasks = routeIds.map(async (routeId) => {
         const routeMaster = railroadMap[routeId];
         if (!routeMaster) return;
@@ -538,7 +534,6 @@ async function loadTimetables() {
         const filePrefix = routeMaster['時刻表ID'] || routeId;
         const systemRules = (Array.isArray(calendarData) ? calendarData : []).filter(r => r && r['路線系統'] === sysFolder);
 
-        // 改正日等の判定
         let activeDate = '2026-03-14';
         let finalKey = isHoliday ? 'h' : 'w';
 
@@ -558,31 +553,31 @@ async function loadTimetables() {
         const path = `zaisen/railroad/${sysFolder}/${activeDate}`;
         const urls = [`${path}/${filePrefix}_${finalKey}_in.csv`, `${path}/${filePrefix}_${finalKey}_out.csv`];
 
-        // 2つのファイルを同時にFetch
-        const [inData, outData] = await Promise.all(
-            urls.map(url => safeFetch(url).catch(() => null))
-        );
-
-        if (inData) {
-            const parsed = parseTimetableCSV(inData);
-            timetables.in = timetables.in.concat(parsed);
-            console.log(`成功: ${urls[0]}`);
-        } else {
-            console.error(`失敗: ${urls[0]}`);
-        }
-
-        if (outData) {
-            const parsed = parseTimetableCSV(outData);
-            timetables.out = timetables.out.concat(parsed);
-            console.log(`成功: ${urls[1]}`);
-        } else {
-            console.error(`失敗: ${urls[1]}`);
+        for (const url of urls) {
+            try {
+                const data = await safeFetch(url);
+                if (data && data.length > 0) {
+                    const parsed = parseTimetableCSV(data);
+                    if (parsed.length > 0) {
+                        if (url.includes('_in.csv')) timetables.in = timetables.in.concat(parsed);
+                        else timetables.out = timetables.out.concat(parsed);
+                        console.log("【成功】取得完了: " + url + " (行数: " + parsed.length + ")");
+                    } else {
+                        console.warn("【空】取得できたがデータなし: " + url);
+                    }
+                } else {
+                    console.warn("【エラー】取得失敗かデータなし: " + url);
+                }
+            } catch (e) {
+                console.error("【通信失敗】: " + url);
+            }
         }
     });
 
-    // 全ての路線読み込みが終わるのを待つ
     await Promise.all(loadTasks);
-    console.log("--- 全路線の読み込み完了 ---");
+    console.log("--- 全路線処理完了 ---");
+    console.log("上り列車合計:", timetables.in.length);
+    console.log("下り列車合計:", timetables.out.length);
 }
         async function renderRoute() {
             const layoutFile = activeLayouts[currentSystem];
