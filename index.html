@@ -837,66 +837,57 @@
             return targetDate.getTime() / 1000;
         }
 
-        function updateTrainPositions() {
+       function updateTrainPositions() {
             if (!currentStations || !currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
             if (!trainLayer) return;
             trainLayer.innerHTML = '';
 
             const nowSec = new Date().getTime() / 1000;
-            const positionSlots = {};
             const lineX = getLineX();
 
-            function registerAndRenderTrain(train, yPos, direction) {
-                // 列車アイコンを線から少し離すため、オフセット量を調整（in: -35→-45, out: +15→+25）
-                const baseLeft = direction === 'in' ? (lineX - 45) : (lineX + 25);
-                
-                const slotKey = `${Math.round(yPos / 20) * 20}_${direction}`;
-                if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
-                const offset = positionSlots[slotKey] * 28;
-                positionSlots[slotKey]++;
-
-                const finalLeft = direction === 'in' ? (baseLeft - offset) : (baseLeft + offset);
-
-                const icon = document.createElement('div');
-                icon.className = 'train-icon';
-                icon.style.top = `${yPos - 12}px`;
-                icon.style.left = `${finalLeft}px`;
-                icon.title = `列車番号: ${train.trainNo} (${direction === 'in' ? '上り' : '下り'})`;
-                trainLayer.appendChild(icon);
-            }
-
             ['in', 'out'].forEach(dir => {
-                const list = timetables[dir] || [];
-                list.forEach(train => {
+                (timetables[dir] || []).forEach(train => {
                     for (let i = 0; i < currentStations.length; i++) {
-                        const stationId = currentStations[i]['駅ID'];
-                        const stName = stationsMap[stationId];
-                        if (!stName) continue;
-                        
-                        const stopInfo = train.stops[stName];
-                        if (!stopInfo) continue;
+                        const stName = stationsMap[currentStations[i]['駅ID']];
+                        if (!stName || !train.stops[stName]) continue;
 
-                        let arrSec = timeToSeconds(stopInfo['着']);
-                        let depSec = timeToSeconds(stopInfo['発']);
-                        
-                      // updateTrainPositions内のループの中にこれを挿入
-if (nowSec >= arrSec && nowSec < depSec) {
-    // 駅にいる
-    registerAndRenderTrain(train, currentStationY, dir);
-    return;
-} else if (nowSec >= depSec && nowSec < nextArrSec) {
-    // 間にいる
-    // ...
-    return;
-} else {
-    // 【ここが重要！】ここに来ているということは、
-    // 現在時刻がどの条件にも当てはまらない「時刻表の隙間」にいる列車です
-    console.log(`列車 ${train.trainNo} が範囲外です: 現在=${new Date(nowSec*1000).toLocaleTimeString()}, 発=${depSec}, 着=${nextArrSec}`);
-}
+                        const stop = train.stops[stName];
+                        const arrSec = timeToSeconds(stop['着']);
+                        const depSec = timeToSeconds(stop['発']);
+                        const currentY = i * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
+
+                        // 1. 駅にいるか判定 (到着<=now<発車)
+                        if (arrSec && depSec && nowSec >= arrSec && nowSec < depSec) {
+                            renderTrainIcon(train, currentY, dir, lineX);
+                            return;
+                        }
+
+                        // 2. 駅間にいるか判定 (発車<=now<次駅の到着)
+                        if (i < currentStations.length - 1) {
+                            const nextStName = stationsMap[currentStations[i + 1]['駅ID']];
+                            const nextStop = train.stops[nextStName];
+                            if (nextStop && depSec) {
+                                const nextArrSec = timeToSeconds(nextStop['着'] || nextStop['発']);
+                                if (nextArrSec && nowSec >= depSec && nowSec < nextArrSec) {
+                                    const nextY = (i + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
+                                    renderTrainIcon(train, currentY + (nextY - currentY) * 0.5, dir, lineX);
+                                    return;
+                                }
+                            }
+                        }
                     }
                 });
             });
+        }
+
+        // アイコン描画用ヘルパー関数（これを下に追加してください）
+        function renderTrainIcon(train, yPos, dir, lineX) {
+            const icon = document.createElement('div');
+            icon.className = 'train-icon';
+            icon.style.top = `${yPos - 12}px`;
+            icon.style.left = `${(dir === 'in' ? lineX - 45 : lineX + 25)}px`;
+            document.getElementById('train-layer').appendChild(icon);
         }
     </script>
 </body>
