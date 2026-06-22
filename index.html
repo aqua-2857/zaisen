@@ -249,6 +249,7 @@
             background-color: rgba(0, 122, 255, 0.2);
         }
 
+        /* ローディング画面のスタイル */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -509,48 +510,27 @@
         }
 
        
-
 async function loadTimetables() {
     const now = new Date();
-    const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const isHoliday = (now.getDay() === 0 || now.getDay() === 6);
+    let dayKey = isHoliday ? 'h' : 'w';
     
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${yyyy}-${mm}-${dd}`;
-
     timetables.in = [];
     timetables.out = [];
 
+    const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
     let calendarData = [];
     try {
+       
         const textCalendar = await safeFetch('zaisen - calendar.csv');
         calendarData = parseCSV(textCalendar);
     } catch (e) {
-        console.error("zaisen - calendar.csv の読み込みに失敗しました。", e.message);
-        return; 
+        console.error("カレンダーCSVの読み込みに失敗しました。ファイルを確認してください。", e.message);
+        return;
     }
 
- 
-    let isHoliday = (now.getDay() === 0 || now.getDay() === 6);
-
-    try {
-        const holidayRes = await fetch(`https://api.github.com/repos/holiday-jp/holiday_js/contents/lib/holidays.json`, {
-            headers: { 'Accept': 'application/vnd.github.v3.raw' }
-        });
-        if (holidayRes.ok) {
-            const holidays = await holidayRes.json();
-            if (holidays && holidays[todayStr]) {
-                isHoliday = true;
-            }
-        }
-    } catch (e) {
-        console.warn("祝日データの自動取得に失敗したため、曜日判定のみで行います:", e.message);
-    }
-
-    let dayKey = isHoliday ? 'h' : 'w'; 
-
-    const routeIds = Object.keys(railroadMap); 
+    const routeIds = Object.keys(railroadMap);
     for (const routeId of routeIds) {
         const routeMaster = railroadMap[routeId];
         if (!routeMaster) continue;
@@ -558,31 +538,34 @@ async function loadTimetables() {
         const sysFolder = routeMaster['路線系統'] || 'saikyo';
         const filePrefix = routeMaster['時刻表ID'] || routeId; 
 
+      
         const systemRules = calendarData.filter(row => row['路線系統'] === sysFolder);
 
-        let activeTimetableDate = ''; 
-        let finalDayKey = dayKey;     
+        let activeTimetableDate = '';
+        let finalDayKey = dayKey;    
 
         const defaultRule = systemRules.find(row => !row['開始日'] && !row['終了日']);
         if (defaultRule) {
             activeTimetableDate = defaultRule['改正日'];
         }
 
+     
         for (const rule of systemRules) {
             if (rule['開始日'] && rule['終了日']) {
                 const startTime = new Date(rule['開始日']).getTime();
                 const endTime = new Date(rule['終了日']).getTime();
 
+               
                 if (!isNaN(startTime) && !isNaN(endTime) && todayTime >= startTime && todayTime <= endTime) {
-                    if (rule['改正日']) activeTimetableDate = rule['改正日']; 
-                    if (rule['例外ダイヤ名']) finalDayKey = rule['例外ダイヤ名']; 
+                    if (rule['改正日']) activeTimetableDate = rule['改正日'];
+                    if (rule['例外ダイヤ名']) finalDayKey = rule['例外ダイヤ名'];
                     break; 
                 }
             }
         }
 
         if (!activeTimetableDate) {
-            console.warn(`系統: ${sysFolder} の改正日がカレンダーCSV内で定義されていません。`);
+            console.warn(`系統: ${sysFolder} の改正日がカレンダーCSV内で見つかりません。`);
             continue;
         }
 
@@ -602,6 +585,37 @@ async function loadTimetables() {
         }
     }
 }
+
+      function parseTimetableCSV(text) {
+    const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
+    const lines = cleanText.split('\n').filter(l => l.trim() !== '');
+    if (lines.length < 6) return [];
+
+    const trainNumbers = lines[0].split(',').slice(2);
+    const trains = trainNumbers.map(num => ({ trainNo: num.trim(), stops: {} }));
+
+    for (let i = 5; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        if (cols.length < 3) continue;
+
+        const stationName = cols[0];
+        const type = cols[1];       
+
+        if (!stationName || (type !== '着' && type !== '発')) continue;
+
+       
+        for (let j = 2; j < cols.length; j++) {
+            const timeStr = cols[j];
+            if (timeStr && trains[j - 2]) {
+               
+                if (!trains[j - 2].stops[stationName]) {
+                    trains[j - 2].stops[stationName] = {};
+                }
+               
+                trains[j - 2].stops[stationName][type] = timeStr;
+            }
+        }
+    }
 
    
     return trains.filter(t => t.trainNo !== '');
