@@ -1,3 +1,4 @@
+<!-- 2026/06/22 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -6,8 +7,8 @@
     <title>在線アプリ</title>
     <style>
         :root {
-            --bg-color: #F0F0F0;        /* 駅間エリア：メイン背景色 */
-            --sub-bg-color: #F8F8F8;    /* 駅エリア：サブ背景色 */
+            --bg-color: #F0F0F0;       
+            --sub-bg-color: #F8F8F8;   
             --header-bg: #1C1C1C;
             --btn-color: #333333;
             --row-height: 80px; 
@@ -379,7 +380,7 @@
             }
         }
 
-        // 路線IDからラインカラーを安全に引き出す関数
+      
         function getLineColorById(routeId) {
             if (routeId && railroadMap[routeId]) {
                 return railroadMap[routeId]['ラインカラー'];
@@ -387,12 +388,12 @@
             return '#999999';
         }
 
-        // 路線IDから路線名を表示用に引き出す関数
+         
         function getRouteNameById(routeId) {
             if (routeId && railroadMap[routeId]) {
                 return railroadMap[routeId]['路線名'];
             }
-            return routeId || ''; // 見つからなければIDをそのまま返す
+            return routeId || '';
         }
 
         async function loadInfoAndGenerateButtons() {
@@ -425,16 +426,32 @@
             }
         }
 
-        async function loadZaisen(systemId) {
-            currentSystem = systemId;
-            document.getElementById('header-title').innerText = systemNameMap[systemId] || "位置情報";
-            document.getElementById('home-screen').style.display = 'none';
-            document.getElementById('zaisen-screen').style.display = 'block';
-            document.getElementById('back-button').style.display = 'block';
+     
+function scrollToStation(stationId) {
+    const targetElement = document.getElementById(`station-row-${stationId}`);
+    if (targetElement) {
+        const elementRect = targetElement.getBoundingClientRect();
+        const absoluteElementTop = elementRect.top + window.pageYOffset;
+        const middle = absoluteElementTop - (window.innerHeight / 2) + (elementRect.height / 2);
+        window.scrollTo({ top: middle, behavior: 'smooth' });
+    }
+}
 
-            await loadTimetables();
-            await renderRoute();
-        }
+async function loadZaisen(systemId, anchorStationId = null) {
+    currentSystem = systemId;
+    document.getElementById('header-title').innerText = systemNameMap[systemId] || "位置情報";
+    document.getElementById('home-screen').style.display = 'none';
+    document.getElementById('zaisen-screen').style.display = 'block';
+    document.getElementById('back-button').style.display = 'block';
+
+    await loadTimetables();
+    await renderRoute();
+
+  
+    if (anchorStationId) {
+        setTimeout(() => scrollToStation(anchorStationId), 100);
+    }
+}
 
         function showHomeScreen() {
             document.getElementById('header-title').innerText = "ホーム";
@@ -549,13 +566,13 @@
                     }
                     stationListDiv.appendChild(blockDiv);
 
-                    // --- 配線・分岐 描画ロジック ---
+                  
                     const currentY = index * 160 + 40; 
                     
                     const currentRailId = row['路線ID'];
                     const currentLineColor = getLineColorById(currentRailId);
                     
-                    // 【修正】「分岐路線」列（路線ID）をマスタ引きして正しい路線名とカラーを取得
+                   
                     const branchRouteId = row['分岐路線'] || '';
                     const targetBranchName = getRouteNameById(branchRouteId);
                     const branchLineColor = getLineColorById(branchRouteId);
@@ -585,7 +602,7 @@
 
                             let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = 40;
 
-                            // 【座標調整】textYの基準位置を0.7文字分（約+11px）下げて配線の中心に配置
+                           
                             if (branch === 'il') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX - 40} ${currentY - 40} L 0 ${currentY - 40}`;
                                 textX = 20; textY = (currentY - 40) + 2; 
@@ -631,11 +648,14 @@
                                     clickZone.style.width = `${zoneWidth}px`;
                                     clickZone.style.height = `${zoneHeight}px`;
                                     
-                                    clickZone.onclick = (e) => {
-                                        e.stopPropagation();
-                                        activeLayouts[currentSystem] = `display/${row['表示先']}.csv`;
-                                        renderRoute(); 
-                                    };
+                                   
+                                clickZone.onclick = (e) => {
+                                    e.stopPropagation();
+                                    activeLayouts[currentSystem] = `display/${row['表示先']}.csv`;
+                                   
+                                    loadZaisen(currentSystem, stationId); 
+                                };
+                               
                                     clickableLayer.appendChild(clickZone);
                                 }
                             }
