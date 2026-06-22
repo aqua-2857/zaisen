@@ -569,7 +569,7 @@ async function loadTimetables() {
             continue;
         }
 
-        const folderPath = `zaisen/railroad/${sysFolder}/${activeTimetableDate}`;
+        const folderPath = `railroad/${sysFolder}/${activeTimetableDate}`;
 
         try {
             const textIn = await safeFetch(`${folderPath}/${filePrefix}_${finalDayKey}_in.csv`);
