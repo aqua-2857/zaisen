@@ -1,5 +1,4 @@
 <!-- 2026/06/22 -->
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -8,11 +7,12 @@
     <title>在線アプリ</title>
     <style>
         :root {
-            --bg-color: #F0F0F0;       
+            --bg-color: #F0F0F0;
             --sub-bg-color: #F8F8F8;   
             --header-bg: #1C1C1C;
             --btn-color: #333333;
-            --row-height: 80px; 
+            /* 高さを従来の7割に縮小 (80px * 0.7 = 56px) */
+            --row-height: 56px; 
         }
 
         body {
@@ -20,7 +20,7 @@
             font-family: 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-color);
             color: #333;
-            overflow-x: hidden; 
+            overflow-x: hidden;
         }
 
         .header { 
@@ -178,7 +178,7 @@
 
         .station-name {
             font-weight: bold;
-            font-size: 1.1rem;
+            font-size: 0.95rem; /* 駅名表示を少し小さく変更 */
             color: #333;
             white-space: nowrap;
             overflow: hidden;
@@ -226,7 +226,7 @@
             background-image: url('icon/unknown.png');
             background-size: contain;
             background-repeat: no-repeat;
-            transition: all 0.5s linear;
+            /* アニメーション用のtransitionを削除 */
         }
 
         .branch-clickable-container {
@@ -249,7 +249,6 @@
             background-color: rgba(0, 122, 255, 0.2);
         }
 
-        /* ローディング画面のスタイル */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -320,6 +319,10 @@
         let currentStations = [];
         let timetables = { in: [], out: [] }; 
 
+        // 7割の高さに変更したため、1ブロックあたりの高さを112px（56px * 2）に設定
+        const BLOCK_HEIGHT = 112;
+        const ROW_HALF_HEIGHT = 28;
+
         function getLineX() {
             const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
             return screenWidth * 0.70;
@@ -332,10 +335,20 @@
             }
         };
 
-        setInterval(updateTrainPositions, 5000);
+        // 毎分0秒に同期して更新処理をループさせる関数
+        function syncUpdateLoop() {
+            updateTrainPositions();
+            const now = new Date();
+            const delay = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+            setTimeout(() => {
+                syncUpdateLoop();
+            }, delay);
+        }
+
         window.onload = async () => {
             await fetchGitHubCommits();
             await initApp();
+            syncUpdateLoop(); // 毎分0秒同期のループを開始
         };
 
         function toggleMenu() {
@@ -435,7 +448,7 @@
                     if (!sysId) return;
 
                     systemNameMap[sysId] = sysName;
-                    
+                     
                     if (!activeLayouts[sysId]) {
                         activeLayouts[sysId] = `display/${sysId}-1.csv`; 
                     }
@@ -445,7 +458,7 @@
                     btn.innerText = sysName;
                     btn.onclick = () => loadZaisen(sysId);
                     homeScreen.appendChild(btn);
-                });
+               });
             } catch (e) {
                 console.error("info.csvの読み込みに失敗:", e.message);
             }
@@ -457,7 +470,6 @@
                 const elementRect = targetElement.getBoundingClientRect();
                 const absoluteElementTop = elementRect.top + window.pageYOffset;
                 const middle = absoluteElementTop - (window.innerHeight / 2) + (elementRect.height / 2);
-                // 一瞬でジャンプ
                 window.scrollTo({ top: middle, behavior: 'auto' });
             }
         }
@@ -466,11 +478,9 @@
             const loader = document.getElementById('loading-screen');
             const zaisenScreen = document.getElementById('zaisen-screen');
 
-           
             if (anchorStationId && loader) {
                 loader.style.opacity = '1';
                 loader.style.display = 'flex';
-             
                 zaisenScreen.style.opacity = '0';
             }
 
@@ -482,14 +492,9 @@
 
             await loadTimetables();
             await renderRoute();
-
             if (anchorStationId) {
-              
                 setTimeout(() => {
-                   
                     scrollToStation(anchorStationId);
-                    
-                   
                     zaisenScreen.style.opacity = '1';
                     if (loader) {
                         loader.style.opacity = '0';
@@ -509,117 +514,143 @@
             document.getElementById('back-button').style.display = 'none';
         }
 
-       
-async function loadTimetables() {
-    const now = new Date();
-    const isHoliday = (now.getDay() === 0 || now.getDay() === 6);
-    let dayKey = isHoliday ? 'h' : 'w';
-    
-    timetables.in = [];
-    timetables.out = [];
+        // 内閣府のAPI(CSV)から祝日データを取得して判定する関数
+        async function checkIsHolidayAPI(targetDate) {
+            try {
+                const res = await fetch('https://www8.cao.go.jp/chousei/shukujitsu/syukujitsu.csv');
+                if (!res.ok) return false;
+                const buffer = await res.arrayBuffer();
+                const decoder = new TextDecoder('shift-jis'); // 内閣府CSVはShift-JIS
+                const text = decoder.decode(buffer);
+                const lines = text.split('\n');
+                
+                // YYYY/M/D または YYYY/MM/DD の形式を合わせる
+                const ty = targetDate.getFullYear();
+                const tm = targetDate.getMonth() + 1;
+                const td = targetDate.getDate();
+                const targetStr = `${ty}/${tm}/${td}`;
+                const targetStrZero = `${ty}/${String(tm).padStart(2,'0')}/${String(td).padStart(2,'0')}`;
 
-    const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-    let calendarData = [];
-    try {
-       
-        const textCalendar = await safeFetch('zaisen - calendar.csv');
-        calendarData = parseCSV(textCalendar);
-    } catch (e) {
-        console.error("カレンダーCSVの読み込みに失敗しました。ファイルを確認してください。", e.message);
-        return;
-    }
-
-    const routeIds = Object.keys(railroadMap);
-    for (const routeId of routeIds) {
-        const routeMaster = railroadMap[routeId];
-        if (!routeMaster) continue;
-
-        const sysFolder = routeMaster['路線系統'] || 'saikyo';
-        const filePrefix = routeMaster['時刻表ID'] || routeId; 
-
-      
-        const systemRules = calendarData.filter(row => row['路線系統'] === sysFolder);
-
-        let activeTimetableDate = '';
-        let finalDayKey = dayKey;    
-
-        const defaultRule = systemRules.find(row => !row['開始日'] && !row['終了日']);
-        if (defaultRule) {
-            activeTimetableDate = defaultRule['改正日'];
+                for(let i = 1; i < lines.length; i++) {
+                    const cols = lines[i].split(',');
+                    if(cols[0]) {
+                        const csvDate = cols[0].trim();
+                        if(csvDate === targetStr || csvDate === targetStrZero) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("祝日データの取得に失敗しました:", e);
+            }
+            return false;
         }
 
-     
-        for (const rule of systemRules) {
-            if (rule['開始日'] && rule['終了日']) {
-                const startTime = new Date(rule['開始日']).getTime();
-                const endTime = new Date(rule['終了日']).getTime();
+        async function loadTimetables() {
+            let now = new Date();
+            
+            // 【4時基準の1日概念ロジック】
+            // 朝4時より前（0:00〜3:59）であれば、前日の日付として処理する
+            if (now.getHours() < 4) {
+                now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            }
 
-               
-                if (!isNaN(startTime) && !isNaN(endTime) && todayTime >= startTime && todayTime <= endTime) {
-                    if (rule['改正日']) activeTimetableDate = rule['改正日'];
-                    if (rule['例外ダイヤ名']) finalDayKey = rule['例外ダイヤ名'];
-                    break; 
+            // 内閣府データから祝日かどうかの判定を取得
+            const isHolidayAPI = await checkIsHolidayAPI(now);
+            const isWeekend = (now.getDay() === 0 || now.getDay() === 6);
+            
+            // 土曜日・日曜日、または祝日の場合は休日ダイヤ('h')、それ以外は平日ダイヤ('w')
+            let dayKey = (isWeekend || isHolidayAPI) ? 'h' : 'w';
+            timetables.in = [];
+            timetables.out = [];
+
+            const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+            let calendarData = [];
+            try {
+                const textCalendar = await safeFetch('zaisen - calendar.csv');
+                calendarData = parseCSV(textCalendar);
+            } catch (e) {
+                console.error("カレンダーCSVの読み込みに失敗しました。ファイルを確認してください。", e.message);
+                return;
+            }
+
+            const routeIds = Object.keys(railroadMap);
+            for (const routeId of routeIds) {
+                const routeMaster = railroadMap[routeId];
+                if (!routeMaster) continue;
+
+                const sysFolder = routeMaster['路線系統'] || 'saikyo';
+                const filePrefix = routeMaster['時刻表ID'] || routeId;
+                const systemRules = calendarData.filter(row => row['路線系統'] === sysFolder);
+
+                let activeTimetableDate = '';
+                let finalDayKey = dayKey;
+                const defaultRule = systemRules.find(row => !row['開始日'] && !row['終了日']);
+                if (defaultRule) {
+                    activeTimetableDate = defaultRule['改正日'];
+                }
+
+                for (const rule of systemRules) {
+                    if (rule['開始日'] && rule['終了日']) {
+                        const startTime = new Date(rule['開始日']).getTime();
+                        const endTime = new Date(rule['終了日']).getTime();
+
+                        if (!isNaN(startTime) && !isNaN(endTime) && todayTime >= startTime && todayTime <= endTime) {
+                            if (rule['改正日']) activeTimetableDate = rule['改正日'];
+                            if (rule['例外ダイヤ名']) finalDayKey = rule['例外ダイヤ名'];
+                            break; 
+                        }
+                    }
+                }
+
+                if (!activeTimetableDate) {
+                    console.warn(`系統: ${sysFolder} の改正日がカレンダーCSV内で見つかりません。`);
+                    continue;
+                }
+
+                const folderPath = `railroad/${sysFolder}/${activeTimetableDate}`;
+                try {
+                    const textIn = await safeFetch(`${folderPath}/${filePrefix}_${finalDayKey}_in.csv`);
+                    timetables.in = timetables.in.concat(parseTimetableCSV(textIn));
+                } catch (e) {
+                    console.warn(`上り時刻表の読み込みスキップ: ${filePrefix}_${finalDayKey} (${folderPath})`, e.message);
+                }
+                try {
+                    const textOut = await safeFetch(`${folderPath}/${filePrefix}_${finalDayKey}_out.csv`);
+                    timetables.out = timetables.out.concat(parseTimetableCSV(textOut));
+                } catch (e) {
+                    console.warn(`下り時刻表の読み込みスキップ: ${filePrefix}_${finalDayKey} (${folderPath})`, e.message);
                 }
             }
         }
 
-        if (!activeTimetableDate) {
-            console.warn(`系統: ${sysFolder} の改正日がカレンダーCSV内で見つかりません。`);
-            continue;
-        }
+        function parseTimetableCSV(text) {
+            const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
+            const lines = cleanText.split('\n').filter(l => l.trim() !== '');
+            if (lines.length < 6) return [];
 
-        const folderPath = `railroad/${sysFolder}/${activeTimetableDate}`;
+            const trainNumbers = lines[0].split(',').slice(2);
+            const trains = trainNumbers.map(num => ({ trainNo: num.trim(), stops: {} }));
+            for (let i = 5; i < lines.length; i++) {
+                const cols = lines[i].split(',').map(c => c.trim());
+                if (cols.length < 3) continue;
 
-        try {
-            const textIn = await safeFetch(`${folderPath}/${filePrefix}_${finalDayKey}_in.csv`);
-            timetables.in = timetables.in.concat(parseTimetableCSV(textIn));
-        } catch (e) {
-            console.warn(`上り時刻表の読み込みスキップ: ${filePrefix}_${finalDayKey} (${folderPath})`, e.message);
-        }
-        try {
-            const textOut = await safeFetch(`${folderPath}/${filePrefix}_${finalDayKey}_out.csv`);
-            timetables.out = timetables.out.concat(parseTimetableCSV(textOut));
-        } catch (e) {
-            console.warn(`下り時刻表の読み込みスキップ: ${filePrefix}_${finalDayKey} (${folderPath})`, e.message);
-        }
-    }
-}
-
-      function parseTimetableCSV(text) {
-    const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
-    const lines = cleanText.split('\n').filter(l => l.trim() !== '');
-    if (lines.length < 6) return [];
-
-    const trainNumbers = lines[0].split(',').slice(2);
-    const trains = trainNumbers.map(num => ({ trainNo: num.trim(), stops: {} }));
-
-    for (let i = 5; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
-        if (cols.length < 3) continue;
-
-        const stationName = cols[0];
-        const type = cols[1];       
-
-        if (!stationName || (type !== '着' && type !== '発')) continue;
-
-       
-        for (let j = 2; j < cols.length; j++) {
-            const timeStr = cols[j];
-            if (timeStr && trains[j - 2]) {
-               
-                if (!trains[j - 2].stops[stationName]) {
-                    trains[j - 2].stops[stationName] = {};
+                const stationName = cols[0];
+                const type = cols[1];
+                if (!stationName || (type !== '着' && type !== '発')) continue;
+                for (let j = 2; j < cols.length; j++) {
+                    const timeStr = cols[j];
+                    if (timeStr && trains[j - 2]) {
+                        if (!trains[j - 2].stops[stationName]) {
+                            trains[j - 2].stops[stationName] = {};
+                        }
+                        trains[j - 2].stops[stationName][type] = timeStr;
+                    }
                 }
-               
-                trains[j - 2].stops[stationName][type] = timeStr;
             }
+            return trains.filter(t => t.trainNo !== '');
         }
-    }
-
-   
-    return trains.filter(t => t.trainNo !== '');
-}
 
         async function renderRoute() {
             const layoutFile = activeLayouts[currentSystem];
@@ -638,10 +669,13 @@ async function loadTimetables() {
                 stationListDiv.innerHTML = '';
                 svgLayer.innerHTML = '';
                 clickableLayer.innerHTML = '';
-                const totalHeight = currentStations.length * 160 - 80; 
+                
+                // 高さ縮小に伴い全体の高さを再計算
+                const totalHeight = currentStations.length * BLOCK_HEIGHT - ROW_HALF_HEIGHT * 2; 
                 svgLayer.setAttribute('height', totalHeight);
                 svgLayer.setAttribute('width', screenWidth);
                 svgLayer.setAttribute('viewBox', `0 0 ${screenWidth} ${totalHeight}`);
+                
                 currentStations.forEach((row, index) => {
                     const stationId = row['駅ID'];
                     if (!stationId) return;
@@ -663,7 +697,7 @@ async function loadTimetables() {
                     
                     const dotIcon = document.createElement('div');
                     dotIcon.className = 'station-icon-dot';
-                    dotIcon.innerText = '>';
+                    dotIcon.innerText = '＞'; // 半角の「>」から全角の「＞」に変更
 
                     nameContainer.appendChild(nameDiv);
                     nameContainer.appendChild(dotIcon);
@@ -676,7 +710,8 @@ async function loadTimetables() {
                         blockDiv.appendChild(betweenDiv);
                     }
                     stationListDiv.appendChild(blockDiv);
-                    const currentY = index * 160 + 40; 
+                    
+                    const currentY = index * BLOCK_HEIGHT + ROW_HALF_HEIGHT; 
                     
                     const currentRailId = row['路線ID'];
                     const currentLineColor = getLineColorById(currentRailId);
@@ -684,12 +719,12 @@ async function loadTimetables() {
                     const targetBranchName = getRouteNameById(branchRouteId);
                     const branchLineColor = getLineColorById(branchRouteId);
                     if (index < currentStations.length - 1) {
-                        const nextY = (index + 1) * 160 + 40;
+                        const nextY = (index + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
                         const branch = row['分岐方向']; 
 
                         let mainD = `M ${lineX} ${nextY} L ${lineX} ${currentY}`;
                         if (branch === 'ic' || branch === 'oc') {
-                            mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + 80}`;
+                            mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + ROW_HALF_HEIGHT}`;
                         }
 
                         const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -704,25 +739,25 @@ async function loadTimetables() {
                             let branchD = '';
                             let textX = 0;
                             let textY = 0;
-                            let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = 40;
+                            let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
                             if (branch === 'il') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX - 40} ${currentY - 40} L 0 ${currentY - 40}`;
-                                textX = 20; textY = (currentY - 40) + 2; 
-                                zoneLeft = 0; zoneTop = currentY - 60;
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
+                                textX = 20; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
+                                zoneLeft = 0; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
                                 zoneWidth = lineX; zoneHeight = 50;
                             } else if (branch === 'ir') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - 40}, ${lineX + 40} ${currentY - 40} L ${screenWidth} ${currentY - 40}`;
-                                textX = lineX + 40; textY = (currentY - 40) + 2; 
-                                zoneLeft = lineX; zoneTop = currentY - 60;
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L ${screenWidth} ${currentY - ROW_HALF_HEIGHT}`;
+                                textX = lineX + 40; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
+                                zoneLeft = lineX; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
                                 zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             } else if (branch === 'ol') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX - 40} ${currentY + 40} L 0 ${currentY + 40}`;
-                                textX = 20; textY = (currentY + 40) + 2; 
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L 0 ${currentY + ROW_HALF_HEIGHT}`;
+                                textX = 20; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
                                 zoneLeft = 0; zoneTop = currentY + 15;
                                 zoneWidth = lineX; zoneHeight = 50;
                             } else if (branch === 'or') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + 40}, ${lineX + 40} ${currentY + 40} L ${screenWidth} ${currentY + 40}`;
-                                textX = lineX + 40; textY = (currentY + 40) + 2; 
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L ${screenWidth} ${currentY + ROW_HALF_HEIGHT}`;
+                                textX = lineX + 40; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
                                 zoneLeft = lineX; zoneTop = currentY + 15;
                                 zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             }
@@ -765,11 +800,14 @@ async function loadTimetables() {
                         }
                     }
 
+                    // ●から〇に変えるため、fillを#FFFFFF(白)、strokeを#000000(黒)に変更
                     const stationDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     stationDot.setAttribute('cx', lineX);
                     stationDot.setAttribute('cy', currentY);
                     stationDot.setAttribute('r', '14'); 
-                    stationDot.setAttribute('fill', '#000000');
+                    stationDot.setAttribute('fill', '#FFFFFF'); 
+                    stationDot.setAttribute('stroke', '#000000');
+                    stationDot.setAttribute('stroke-width', '3');
                     svgLayer.appendChild(stationDot);
                 });
 
@@ -779,18 +817,26 @@ async function loadTimetables() {
             }
         }
 
+        // 4時基準の1日を跨ぐタイムスタンプを秒に変換するロジック
         function timeToSeconds(timeStr) {
-    if (!timeStr) return null;
-   
-    const clean = timeStr.replace(':', '').trim();
-    if (clean.length < 3) return null;
+            if (!timeStr) return null;
+            const clean = timeStr.replace(':', '').trim();
+            if (clean.length < 3) return null;
 
-    const h = parseInt(clean.substring(0, clean.length - 2), 10);
-    const m = parseInt(clean.substring(clean.length - 2), 10);
-    
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0).getTime() / 1000;
-}
+            const h = parseInt(clean.substring(0, clean.length - 2), 10);
+            const m = parseInt(clean.substring(clean.length - 2), 10);
+            
+            let now = new Date();
+            // 現在時刻が4時未満なら基準日を1日前として扱う
+            if (now.getHours() < 4) {
+                now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            }
+            
+            // 時刻表の時間が4時未満（24時以降など含む）かつ現在の実際の時間が深夜帯のケースなどの調整
+            let targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+            return targetDate.getTime() / 1000;
+        }
+
         function updateTrainPositions() {
             if (!currentStations || !currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
@@ -802,7 +848,8 @@ async function loadTimetables() {
             const lineX = getLineX();
 
             function registerAndRenderTrain(train, yPos, direction) {
-                const baseLeft = direction === 'in' ? (lineX - 35) : (lineX + 15);
+                // 列車アイコンを線から少し離すため、オフセット量を調整（in: -35→-45, out: +15→+25）
+                const baseLeft = direction === 'in' ? (lineX - 45) : (lineX + 25);
                 
                 const slotKey = `${Math.round(yPos / 20) * 20}_${direction}`;
                 if (!positionSlots[slotKey]) positionSlots[slotKey] = 0;
@@ -830,15 +877,21 @@ async function loadTimetables() {
                         const stopInfo = train.stops[stName];
                         if (!stopInfo) continue;
 
-                        const arrSec = timeToSeconds(stopInfo['着']);
-                        const depSec = timeToSeconds(stopInfo['発']);
-                        const currentStationY = i * 160 + 40;
+                        let arrSec = timeToSeconds(stopInfo['着']);
+                        let depSec = timeToSeconds(stopInfo['発']);
+                        
+                        // 到着時刻が設定されていない場合は、発車時刻を基準にする
+                        if (!arrSec && depSec) arrSec = depSec;
 
-                        if (arrSec && depSec && nowSec >= arrSec && nowSec <= depSec) {
+                        const currentStationY = i * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
+
+                        // 【条件1: 駅にいる】 A駅到着時刻 <= now < A駅発車時刻
+                        if (arrSec && depSec && nowSec >= arrSec && nowSec < depSec) {
                             registerAndRenderTrain(train, currentStationY, dir);
                             return;
                         }
 
+                        // 【条件2: 駅間にいる】 A駅発車時刻 <= now < B駅到着時刻
                         if (i < currentStations.length - 1) {
                             const nextStationId = currentStations[i+1]['駅ID'];
                             const nextStName = stationsMap[nextStationId];
@@ -846,11 +899,16 @@ async function loadTimetables() {
                             
                             const nextStopInfo = train.stops[nextStName];
                             if (nextStopInfo && depSec) {
-                                const nextArrSec = timeToSeconds(nextStopInfo['着']);
-                                if (nextArrSec && nowSec > depSec && nowSec < nextArrSec) {
-                                    const ratio = (nowSec - depSec) / (nextArrSec - depSec);
-                                    const nextStationY = (i + 1) * 160 + 40;
-                                    const yPos = currentStationY + (nextStationY - currentStationY) * ratio;
+                                let nextArrSec = timeToSeconds(nextStopInfo['着']);
+                                let nextDepSec = timeToSeconds(nextStopInfo['発']);
+                                
+                                // 次の駅の到着時刻が取得できない時は発車時刻を使う
+                                if (!nextArrSec && nextDepSec) nextArrSec = nextDepSec;
+
+                                if (nextArrSec && nowSec >= depSec && nowSec < nextArrSec) {
+                                    // アニメーションなし・中央固定（駅と駅のちょうど真ん中：0.5）
+                                    const nextStationY = (i + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
+                                    const yPos = currentStationY + (nextStationY - currentStationY) * 0.5;
                                     registerAndRenderTrain(train, yPos, dir);
                                     return;
                                 }
