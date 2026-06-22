@@ -553,10 +553,14 @@ async function loadTimetables() {
         const path = `zaisen/railroad/${sysFolder}/${activeDate}`;
         const urls = [`${path}/${filePrefix}_${finalKey}_in.csv`, `${path}/${filePrefix}_${finalKey}_out.csv`];
 
+        // (loadTimetables 関数内の一部を修正)
         for (const url of urls) {
             try {
                 const data = await safeFetch(url);
                 if (data && data.length > 0) {
+                    // ★ここをチェック：読み取ったデータの中身を出力
+                    console.log("読み取った生データ: " + url, data.substring(0, 200)); 
+                    
                     const parsed = parseTimetableCSV(data);
                     if (parsed.length > 0) {
                         if (url.includes('_in.csv')) timetables.in = timetables.in.concat(parsed);
