@@ -17,6 +17,7 @@
             --sub-bg-color: #F8F8F8;   
             --header-bg: #1C1C1C;
             --btn-color: #333333;
+            /* 【要件】駅エリアと駅間エリアの高さをそれぞれ1.5倍（56px * 1.5 = 84px）に変更 */
             --row-height: 84px; 
         }
 
@@ -178,10 +179,11 @@
             gap: 6px;
             padding-left: 20px;
             z-index: 2;
-            max-width: 45%; 
+            max-width: 55%; 
             box-sizing: border-box;
         }
 
+        /* 【要件】駅名を分岐路線名と同じ文字サイズ（14px）に変更 */
         .station-name {
             font-weight: bold;
             font-size: 14px; 
@@ -191,6 +193,7 @@
             text-overflow: ellipsis;
         }
 
+        /* 【要件】駅名の「＞」のところの丸の色を#465DAAに変更 */
         .station-icon-dot {
             display: inline-flex;
             align-items: center;
@@ -225,6 +228,7 @@
             z-index: 10;
         }
 
+        /* 【要件】列車アイコンの上に列車番号を表示するためのコンテナ定義 */
         .train-container {
             position: absolute;
             display: flex;
@@ -233,10 +237,11 @@
             justify-content: flex-end;
             width: 60px;
             height: 50px;
-            pointer-events: auto; /* タップ可能にする */
+            pointer-events: auto; /* タップ可能に設定 */
             cursor: pointer;
         }
 
+        /* 【要件】エリアからはみ出ず、分岐路線とも被らない列車番号ラベル */
         .train-no-label {
             font-size: 10px;
             font-weight: bold;
@@ -303,7 +308,7 @@
             to { transform: rotate(360deg); }
         }
 
-        /* 共通モーダルスタイル */
+        /* モーダル共通スタイル */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -317,7 +322,7 @@
             background: white;
             width: 90%;
             max-width: 450px;
-            max-height: 85vh;
+            max-height: 80vh;
             border-radius: 8px;
             display: flex;
             flex-direction: column;
@@ -328,20 +333,20 @@
             background: var(--header-bg);
             color: white;
             padding: 15px;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             font-weight: bold;
             display: flex;
             align-items: center;
             position: relative;
         }
-        /* 駅名・列車名をヘッダーの中央に揃える */
+        /* 【要件】駅時刻表を開いた時のヘッダーは中央揃えにして駅名に置き換え */
         .modal-header-title-center {
             flex: 1;
             text-align: center;
             font-size: 1.25rem;
             font-weight: bold;
         }
-        /* 列車名・左寄せヘッダー用 */
+        /* 【要件】列車時刻表のヘッダーは列車番号のみで左揃えに */
         .modal-header-title-left {
             flex: 1;
             text-align: left;
@@ -353,58 +358,60 @@
             position: absolute; right: 15px;
         }
         
-        /* 時刻表・操作系エリア(固定) */
+        /* 【要件】駅時刻表の上部ボタンエリアはスクロールしないように分ける */
         .modal-fixed-controls {
             padding: 15px 15px 5px 15px;
             background: #fff;
             border-bottom: 1px solid #eee;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
-        
         .dir-select-container {
             display: flex; gap: 8px;
         }
         .dir-btn {
-            flex: 1; padding: 8px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold; text-align: center;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            flex: 1; padding: 10px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold; text-align: center;
         }
         .dir-btn.active {
             background: var(--btn-color); color: white; border-color: var(--btn-color);
         }
         
-        /* 別々の枠（コンテナ）にしたコントロール行 */
-        .control-box-passing {
-            background: #fdfdfd; border: 1px solid #e2e2e2; padding: 8px 12px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between;
+        /* 【要件】発車到着切替ボタンと通過列車表示は同じ高さの横一列の枠に並べる。左に切替、右に通過有無。 */
+        .control-row-horizontal {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fdfdfd;
+            border: 1px solid #e2e2e2;
+            padding: 8px 12px;
+            border-radius: 4px;
         }
-        .control-box-passing label {
-            font-size: 0.85rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%;
+        .control-row-horizontal .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
-        
-        .control-box-timetype {
-            background: #fdfdfd; border: 1px solid #e2e2e2; padding: 8px 12px; border-radius: 4px; display: flex; align-items: center; justify-content: space-between;
-        }
-        .control-box-timetype span {
-            font-size: 0.85rem; font-weight: bold; color: #555;
+        .control-row-horizontal label {
+            font-size: 0.85rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px;
         }
         .toggle-time-btn {
             padding: 6px 12px; background: var(--btn-color); color: white; border: none; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer;
         }
 
-        /* 時刻データの表示エリア(ここだけをスクロールさせる) */
+        /* 【要件】駅の時刻表のスクロール対象範囲は時刻が書いてあるエリアのみ */
         .modal-scroll-body {
             padding: 15px;
             overflow-y: auto;
             flex: 1;
             background: #fff;
         }
-        
+
         .timetable-table {
             display: flex; flex-direction: column; width: 100%;
         }
         .timetable-row-data {
-            display: flex; border-bottom: 1px solid #ddd; padding: 8px 0; align-items: flex-start;
+            display: flex; border-bottom: 1px solid #ddd; padding: 6px 0; align-items: flex-start;
         }
         .timetable-hour-col {
             width: 35px; font-size: 1.1rem; font-weight: bold; color: #555; text-align: center; border-right: 2px solid #ccc; margin-right: 10px; padding-right: 5px;
@@ -413,7 +420,8 @@
             flex: 1; display: flex; flex-wrap: wrap; gap: 10px 14px;
         }
         .min-cell {
-            display: flex; flex-direction: column; align-items: center; min-width: 25px; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; min-width: 25px;
+            cursor: pointer;
         }
         .min-cell-no {
             font-size: 8px; color: #777; line-height: 1; margin-bottom: 1px; font-weight: normal;
@@ -421,11 +429,12 @@
         .min-cell-time {
             font-size: 0.95rem; font-weight: bold; color: #222; line-height: 1;
         }
+        /* 【要件】取り消し線、薄字(グレーダウン)表記、"通"文字の廃止。通常文字と同じに */
         .min-cell-time.is-passing {
-            color: #aaa; font-weight: normal; text-decoration: line-through;
+            color: #222; font-weight: bold; text-decoration: none;
         }
 
-        /* 列車時刻表用固有スタイル */
+        /* 列車時刻表固有スタイル */
         .train-modal-meta {
             background: #f9f9f9;
             border: 1px solid #e2e2e2;
@@ -457,6 +466,7 @@
             font-weight: bold;
             color: #111;
         }
+        /* 列車時刻表での通過は薄字でカッコ()書き */
         .train-timetable-time.is-passing {
             color: #999;
             font-weight: normal;
@@ -503,23 +513,21 @@
                 <span id="modal-station-name" class="modal-header-title-center">駅名</span>
                 <button class="modal-close-btn" onclick="closeModal()">×</button>
             </div>
-            <!-- 固定ヘッダー（ボタンなど）エリア -->
+            <!-- 固定表示（スクロールしない）のコントロール部 -->
             <div class="modal-fixed-controls">
                 <div class="dir-select-container">
                     <button id="modal-btn-up" class="dir-btn active" onclick="setModalDir('up')">上り<br><span id="modal-txt-up"></span></button>
                     <button id="modal-btn-down" class="dir-btn" onclick="setModalDir('down')">下り<br><span id="modal-txt-down"></span></button>
                 </div>
-                <!-- 通過列車表示用独立ボックス -->
-                <div class="control-box-passing">
-                    <label><input type="checkbox" id="modal-chk-passing" onchange="renderModalTimetable()"> 通過列車を表示する</label>
-                </div>
-                <!-- 発車/到着切り替え用独立ボックス -->
-                <div class="control-box-timetype">
-                    <span>時刻の表示基準:</span>
-                    <button id="modal-btn-time-type" class="toggle-time-btn" onclick="toggleModalTimeType()">発車時刻</button>
+                <!-- 【要件】切替ボタンと通過チェックを同一枠に並列配置 -->
+                <div class="control-row-horizontal">
+                    <div class="toggle-container">
+                        <button id="modal-btn-time-type" class="toggle-time-btn" onclick="toggleModalTimeType()">発車時刻</button>
+                    </div>
+                    <label><input type="checkbox" id="modal-chk-passing" onchange="renderModalTimetable()"> 通過列車表示</label>
                 </div>
             </div>
-            <!-- スクロールする時刻データエリア -->
+            <!-- スクロールする時間表示部 -->
             <div class="modal-scroll-body">
                 <div id="modal-timetable-table" class="timetable-table"></div>
             </div>
@@ -549,28 +557,30 @@
         let currentSystem = '';     
         let currentStations = [];
         
+        // マージ後の列車タイムラインを保持するグローバル配列
         let globalTrains = []; 
+        let loadedTimetablePaths = new Set(); // 重複ロード防止用キャッシュ
 
+        /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
         const ROW_HALF_HEIGHT = 42; 
         
-        // 【要件】位置情報の線を画面の中央寄りに変更 (50%に設定)
+        // 【要件】画面左の駅名スペースを確保しつつ、右側の表示が狭くなりすぎない絶妙な配置（幅の65%に設定）
         function getLineX() {
             const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
-            return screenWidth * 0.50; 
+            return screenWidth * 0.65;
         }
         
         const LINE_WIDTH = 20;
 
         let isTimetablesLoaded = false;
         let globalDayKey = 'w';
-        let loadedTimetablePaths = new Set(); // 重複ロード防止用のキャッシュ
 
         // モーダル管理用状態変数
         let currentModalStationId = '';
         let currentModalStationName = '';
         let currentModalDir = 'up'; 
-        let currentModalTimeType = 'dep'; 
+        let currentModalTimeType = 'dep'; // 'dep'=発車時刻, 'arr'=到着時刻
 
         window.onresize = () => {
             if (document.getElementById('zaisen-screen').style.display === 'block') {
@@ -796,6 +806,7 @@
             return false;
         }
 
+        // 【要件】一度読み取ったcsvは同じファイルを開かないように、一意のファイルパスで管理
         async function loadTimetables() {
             if (isTimetablesLoaded) return;
 
@@ -852,7 +863,7 @@
 
                 const folderPath = `railroad/${sysFolder}/${activeTimetableDate}`;
                 
-                // 【要件】一度読み取ったcsv（運用、時刻表）は重複して開かないように管理
+                // 運用表 (_op.csv) の読み込み
                 const opPath = `${folderPath}/${filePrefix}_${finalDayKey}_op.csv`;
                 if (!loadedTimetablePaths.has(opPath)) {
                     loadedTimetablePaths.add(opPath);
@@ -900,6 +911,7 @@
                     }
                 }
 
+                // 上り時刻表の読み込み
                 const inPath = `${folderPath}/${filePrefix}_${finalDayKey}_in.csv`;
                 if (!loadedTimetablePaths.has(inPath)) {
                     loadedTimetablePaths.add(inPath);
@@ -909,6 +921,7 @@
                     } catch (e) {}
                 }
 
+                // 下り時刻表の読み込み
                 const outPath = `${folderPath}/${filePrefix}_${finalDayKey}_out.csv`;
                 if (!loadedTimetablePaths.has(outPath)) {
                     loadedTimetablePaths.add(outPath);
@@ -979,7 +992,7 @@
             isTimetablesLoaded = true;
         }
 
-        // 時刻表パース。通過列車「レ」対応
+        // 時刻表のパース
         function parseTimetableCSV(text, dir) {
             const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
             const lines = cleanText.split('\n').filter(l => l.trim() !== '');
@@ -1000,15 +1013,15 @@
                         if (!trains[j - 2].stops[stationName]) {
                             trains[j - 2].stops[stationName] = {};
                         }
-
-                        // 【要件】通過列車「レ」表記対応（例：レ1234 -> 12:34。通過フラグを付与）
+                        
+                        // 【要件】通過列車の時刻表はcsvに［レ1234］とあるため、先頭に「レ」があるかで通過列車を判断する。
                         let isPassing = false;
                         if (timeStr.startsWith('レ')) {
                             isPassing = true;
                             timeStr = timeStr.substring(1); // 「レ」を取り除く
                         }
 
-                        // コロンがない場合は補完
+                        // 時刻にコロンがない場合の補完
                         if (timeStr.length === 4 && !timeStr.includes(':')) {
                             timeStr = timeStr.substring(0, 2) + ':' + timeStr.substring(2);
                         }
@@ -1221,14 +1234,13 @@
             const nowSec = new Date().getTime() / 1000;
             const lineX = getLineX();
 
-            // 重なり判定用の集計オブジェクト
-            // キー形式: "station_{stationName}_{dir}" または "between_{stationA}_{stationB}_{dir}"
+            // エリア重複判定用のスロット管理
             const trainSlots = {};
 
             globalTrains.forEach(train => {
                 ['in', 'out'].forEach(dir => {
                     // 【要件】駅停車時に上り下りの両方に同じ列車が表示されるバグの修正
-                    // 統合列車(train)内の列車コンポーネント(comp)から、該当方向(dir)のものだけを処理対象にする
+                    // 該当方向(dir)に合致する列車コンポーネント(comp)のみを対象にする
                     const comp = train.components.find(c => c.dir === dir);
                     if (!comp) return;
 
@@ -1244,7 +1256,7 @@
                         const stName = stationsMap[item.st['駅ID']];
                         if (!stName) return;
                         
-                        const stop = comp.stops[stName]; // compから駅情報を取得
+                        const stop = comp.stops[stName]; // 該当方向の列車時刻を参照
                         if (!stop) return;
 
                         let arr = timeToSeconds(stop['着']);
@@ -1272,11 +1284,10 @@
                             if (!trainSlots[key]) trainSlots[key] = [];
                             trainSlots[key].push({
                                 train: train,
-                                comp: comp,
                                 yPos: current.y,
                                 dir: dir,
                                 stName: current.stName,
-                                sortTime: current.depSec // 先行・後続ソート用の「発車時刻」
+                                sortTime: current.depSec // 先行・後続ソート基準：出発時刻
                             });
                             return; 
                         }
@@ -1290,11 +1301,10 @@
                                 if (!trainSlots[key]) trainSlots[key] = [];
                                 trainSlots[key].push({
                                     train: train,
-                                    comp: comp,
                                     yPos: midY,
                                     dir: dir,
                                     stName: current.stName,
-                                    sortTime: next.arrSec // 次駅への「到着時刻」が早い順を先行とする
+                                    sortTime: next.arrSec // 先行・後続ソート基準：次駅の到着時刻
                                 });
                                 return; 
                             }
@@ -1303,11 +1313,10 @@
                 });
             });
 
-            // 【要件】列車が同一エリアに2本以上あるとき、横にずらして並べて表示する。
-            // 先行列車が一番線に近く、後続になるほど線から離れる。
+            // 同一エリア内の列車同士を横に並べて描画
             Object.keys(trainSlots).forEach(key => {
                 const list = trainSlots[key];
-                // sortTime（早い＝先行列車）順にソート
+                // 先行列車（時間が早い順）にソート
                 list.sort((a, b) => a.sortTime - b.sortTime);
 
                 list.forEach((item, index) => {
@@ -1316,7 +1325,7 @@
             });
         }
 
-        // 列車アイコンの描画
+        // 列車アイコンの描画（【要件】タップ時に列車時刻表をポップアップ起動）
         function renderTrainIcon(train, yPos, dir, lineX, stName, index = 0) {
             const container = document.createElement('div');
             container.className = 'train-container';
@@ -1344,16 +1353,14 @@
                 openTrainModal(train, displayNo);
             };
 
-            // 配置調整
             container.style.top = `${yPos - 38}px`;
 
-            // 【要件】上下線とも線から同じ基準距離（30px）離れて表示、複数あればずらしていく
-            // index=0 (先行列車) は線路に最も近く、後続(index >= 1)は35pxずつ線から離れる。
-            const offset = 30 + (index * 35); 
+            // 等距離（基準30px、2本目以降35pxピッチ）でオフセット配置
+            const offset = 30 + (index * 35);
             if (dir === 'in') {
-                container.style.left = `${lineX - offset - 30}px`; // 左側へずらす
+                container.style.left = `${lineX - offset - 30}px`; 
             } else {
-                container.style.left = `${lineX + offset - 30}px`; // 右側へずらす
+                container.style.left = `${lineX + offset - 30}px`; 
             }
             
             document.getElementById('train-layer').appendChild(container);
@@ -1437,6 +1444,17 @@
 
                         if (isPassing && !showPassing) return; 
 
+                        // 【要件】駅の時刻表において列車の始発駅の場合は到着時刻、終着駅の場合は発車時刻は表示しない。
+                        const isOrigin = (targetStIdx === minIdx);
+                        const isTerminal = (targetStIdx === maxIdx);
+
+                        if (isOrigin && currentModalTimeType === 'arr' && !isPassing) {
+                            return; // 始発駅の到着時刻は非表示
+                        }
+                        if (isTerminal && currentModalTimeType === 'dep' && !isPassing) {
+                            return; // 終着駅の発車時刻は非表示
+                        }
+
                         let timeStr = "";
                         if (isPassing) {
                             timeStr = estimatePassingTime(comp, targetStIdx, stIdxMap);
@@ -1498,8 +1516,9 @@
 
                     let timeDiv = document.createElement('div');
                     timeDiv.className = 'min-cell-time';
+                    // 【要件】通過列車の"通"文字の廃止、取り消し線、薄字の廃止（通常と同じスタイルにする）
                     if (item.isPassing) timeDiv.classList.add('is-passing');
-                    timeDiv.innerText = String(item.minute).padStart(2, '0') + (item.isPassing ? "通" : "");
+                    timeDiv.innerText = String(item.minute).padStart(2, '0');
 
                     cell.appendChild(noDiv);
                     cell.appendChild(timeDiv);
@@ -1516,7 +1535,7 @@
             }
         }
 
-        // 簡易通過時刻補完
+        // 簡易通過時刻の補完処理
         function estimatePassingTime(comp, targetStIdx, stIdxMap) {
             let beforeTime = null, beforeIdx = -1;
             let afterTime = null, afterIdx = -1;
@@ -1551,24 +1570,37 @@
             return "";
         }
 
-        // --- 【要件】列車時刻表ポップアップ制御ロジック群 ---
+        // --- 列車時刻表ポップアップ制御ロジック群 ---
         function openTrainModal(train, trainNo) {
-            // ヘッダーに左揃えで列車番号
-            document.getElementById('train-modal-no').innerText = `${trainNo} の時刻表`;
-            // 一番上に運用番号
-            document.getElementById('train-modal-unyo').innerText = `運用番号: ${train.unyoNo || 'なし'} (${train.unyoGp || '不明'})`;
+            // 【要件】ヘッダータイトルは列車番号（例: "1234G"）のみに
+            document.getElementById('train-modal-no').innerText = trainNo;
+            
+            // 【要件】運用番号は運用番号のみ表示。運用Gp(アルファベット)は内部でのみ使用し、非表示。
+            document.getElementById('train-modal-unyo').innerText = `運用番号: ${train.unyoNo || 'なし'}`;
 
             const listContainer = document.getElementById('train-timetable-list');
             listContainer.innerHTML = '';
 
-            // 現在の系統にある駅の一覧順に沿って時刻を表示する
+            let stIdxMap = {};
+            currentStations.forEach((s, idx) => {
+                let name = stationsMap[s['駅ID']];
+                if (name) stIdxMap[name] = idx;
+            });
+
             currentStations.forEach(stationRow => {
                 const sId = stationRow['駅ID'];
                 const sName = stationsMap[sId] || sId;
                 
-                // 該当駅のストップ情報があるか確認
                 const stop = train.stops[sName];
-                if (!stop) return; // この列車が通らない駅はスキップ
+                if (!stop) return; // この列車が通らない駅は表示スキップ
+
+                const targetStIdx = stIdxMap[sName];
+                let validIdxs = Object.keys(train.stops).map(n => stIdxMap[n]).filter(idx => idx !== undefined);
+                let minIdx = Math.min(...validIdxs);
+                let maxIdx = Math.max(...validIdxs);
+
+                const isOrigin = (targetStIdx === minIdx);
+                const isTerminal = (targetStIdx === maxIdx);
 
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'train-timetable-row';
@@ -1588,14 +1620,16 @@
 
                 const isPassing = stop['isPassing'] || (!stop['着'] && !stop['発']);
                 let displayTime = '';
+                
                 if (isPassing) {
-                    // 通過の場合はカッコ書き
+                    // 通過は薄字のカッコ()書き
                     let passTime = stop['発'] || stop['着'] || '--:--';
                     displayTime = `(${passTime})`;
                     timeSpan.classList.add('is-passing');
                 } else {
-                    const arr = stop['着'] ? stop['着'] + '着' : '';
-                    const dep = stop['発'] ? stop['発'] + '発' : '';
+                    // 【要件】始発駅の到着時刻・終着駅の発車時刻は非表示
+                    const arr = (stop['着'] && !isOrigin) ? stop['着'] + '着' : '';
+                    const dep = (stop['発'] && !isTerminal) ? stop['発'] + '発' : '';
                     displayTime = [arr, dep].filter(t => t).join(' / ');
                 }
                 timeSpan.innerText = displayTime;
