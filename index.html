@@ -425,7 +425,7 @@
         .min-cell-time {
             font-size: 0.95rem; font-weight: bold; color: #222; line-height: 1;
         }
-        /* 【要件】駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、薄字（細身のグレー）で書く。 */
+        /* 【要件】駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、(04)のようにカッコ書きの薄字（細身のグレー）で書く。 */
         .min-cell-time.is-passing {
             color: #888; font-weight: normal; text-decoration: none;
         }
@@ -831,6 +831,9 @@
                 if (!routeMaster) continue;
 
                 const sysFolder = routeMaster['路線系統'] || 'saikyo';
+                
+                // 【要件】運用表は今まで時刻表IDだったが、zaisen - railroad_id.csvの運用表IDを代入する。
+                const opPrefix = routeMaster['運用表ID'] || routeMaster['時刻表ID'] || routeId;
                 const filePrefix = routeMaster['時刻表ID'] || routeId;
                 const systemRules = calendarData.filter(row => row['路線系統'] === sysFolder);
 
@@ -860,7 +863,7 @@
                 const folderPath = `railroad/${sysFolder}/${activeTimetableDate}`;
                 
                 // 運用表 (_op.csv) の読み込み
-                const opPath = `${folderPath}/${filePrefix}_${finalDayKey}_op.csv`;
+                const opPath = `${folderPath}/${opPrefix}_${finalDayKey}_op.csv`;
                 if (!loadedTimetablePaths.has(opPath)) {
                     loadedTimetablePaths.add(opPath);
                     try {
@@ -1093,15 +1096,17 @@
                     
                     const currentRailId = row['路線ID'];
                     const currentLineColor = getLineColorById(currentRailId);
-                    const branchRouteId = row['分岐路線'] || '';
-                    const targetBranchName = getRouteNameById(branchRouteId);
-                    const branchLineColor = getLineColorById(branchRouteId);
+
+                    // 【要件】分岐方向、分岐路線、表示先は複数ある場合、「,」で区切っている。
+                    const branches = (row['分岐方向'] || '').split(',').map(s => s.trim()).filter(s => s);
+                    const branchRouteIds = (row['分岐路線'] || '').split(',').map(s => s.trim());
+                    const branchDisplayDests = (row['表示先'] || '').split(',').map(s => s.trim());
+
                     if (index < currentStations.length - 1) {
                         const nextY = (index + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
-                        const branch = row['分岐方向']; 
 
                         let mainD = `M ${lineX} ${nextY} L ${lineX} ${currentY}`;
-                        if (branch === 'ic' || branch === 'oc') {
+                        if (branches.includes('ic') || branches.includes('oc')) {
                             mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + ROW_HALF_HEIGHT}`;
                         }
 
@@ -1112,71 +1117,79 @@
                         mainPath.setAttribute('fill', 'none');
                         svgLayer.appendChild(mainPath);
 
-                        if (branch && branch !== 'ic' && branch !== 'oc') {
-                            const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                            let branchD = '';
-                            let textX = 0;
-                            let textY = 0;
-                            let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
-                            if (branch === 'il') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
-                                textX = 20; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
-                                zoneLeft = 0; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
-                                zoneWidth = lineX; zoneHeight = 50;
-                            } else if (branch === 'ir') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L ${screenWidth} ${currentY - ROW_HALF_HEIGHT}`;
-                                textX = lineX + 40; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
-                                zoneLeft = lineX;
-                                zoneTop = currentY - ROW_HALF_HEIGHT - 20;
-                                zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                            } else if (branch === 'ol') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L 0 ${currentY + ROW_HALF_HEIGHT}`;
-                                textX = 20; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
-                                zoneLeft = 0; zoneTop = currentY + 15;
-                                zoneWidth = lineX; zoneHeight = 50;
-                            } else if (branch === 'or') {
-                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L ${screenWidth} ${currentY + ROW_HALF_HEIGHT}`;
-                                textX = lineX + 40; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
-                                zoneLeft = lineX; zoneTop = currentY + 15;
-                                zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                            }
+                        // 各分岐方向について個別パス・表示名・タップ領域を生成する
+                        branches.forEach((branch, bIdx) => {
+                            if (branch && branch !== 'ic' && branch !== 'oc') {
+                                const branchRouteId = branchRouteIds[bIdx] || '';
+                                const targetBranchName = getRouteNameById(branchRouteId);
+                                const branchLineColor = getLineColorById(branchRouteId);
+                                const displayDest = branchDisplayDests[bIdx] || '';
 
-                            if (branchD) {
-                                branchPath.setAttribute('d', branchD);
-                                branchPath.setAttribute('stroke', branchLineColor);
-                                branchPath.setAttribute('stroke-width', LINE_WIDTH);
-                                branchPath.setAttribute('fill', 'none');
-                                svgLayer.appendChild(branchPath);
-
-                                if (targetBranchName) {
-                                    const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                                    textSvg.setAttribute('x', textX);
-                                    textSvg.setAttribute('y', (textY - 1).toString());
-                                    textSvg.setAttribute('fill', '#FFFFFF');
-                                    textSvg.setAttribute('font-size', '14px');
-                                    textSvg.setAttribute('font-weight', 'bold');
-                                    textSvg.setAttribute('dominant-baseline', 'central');
-                                    textSvg.textContent = targetBranchName;
-                                    svgLayer.appendChild(textSvg);
+                                const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                                let branchD = '';
+                                let textX = 0;
+                                let textY = 0;
+                                let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
+                                if (branch === 'il') {
+                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
+                                    textX = 20; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
+                                    zoneLeft = 0; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
+                                    zoneWidth = lineX; zoneHeight = 50;
+                                } else if (branch === 'ir') {
+                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L ${screenWidth} ${currentY - ROW_HALF_HEIGHT}`;
+                                    textX = lineX + 40; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
+                                    zoneLeft = lineX;
+                                    zoneTop = currentY - ROW_HALF_HEIGHT - 20;
+                                    zoneWidth = screenWidth - lineX; zoneHeight = 50;
+                                } else if (branch === 'ol') {
+                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L 0 ${currentY + ROW_HALF_HEIGHT}`;
+                                    textX = 20; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
+                                    zoneLeft = 0; zoneTop = currentY + 15;
+                                    zoneWidth = lineX; zoneHeight = 50;
+                                } else if (branch === 'or') {
+                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L ${screenWidth} ${currentY + ROW_HALF_HEIGHT}`;
+                                    textX = lineX + 40; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
+                                    zoneLeft = lineX; zoneTop = currentY + 15;
+                                    zoneWidth = screenWidth - lineX; zoneHeight = 50;
                                 }
 
-                                if (row['表示先']) {
-                                    const clickZone = document.createElement('div');
-                                    clickZone.className = 'branch-clickable-zone';
-                                    clickZone.style.left = `${zoneLeft}px`;
-                                    clickZone.style.top = `${zoneTop}px`;
-                                    clickZone.style.width = `${zoneWidth}px`;
-                                    clickZone.style.height = `${zoneHeight}px`;
-                                    clickZone.onclick = (e) => {
-                                        e.stopPropagation();
-                                        activeLayouts[currentSystem] = `display/${row['表示先']}.csv`;
-                                        loadZaisen(currentSystem, stationId); 
-                                    };
-                               
-                                    clickableLayer.appendChild(clickZone);
+                                if (branchD) {
+                                    branchPath.setAttribute('d', branchD);
+                                    branchPath.setAttribute('stroke', branchLineColor);
+                                    branchPath.setAttribute('stroke-width', LINE_WIDTH);
+                                    branchPath.setAttribute('fill', 'none');
+                                    svgLayer.appendChild(branchPath);
+
+                                    if (targetBranchName) {
+                                        const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                                        textSvg.setAttribute('x', textX);
+                                        textSvg.setAttribute('y', (textY - 1).toString());
+                                        textSvg.setAttribute('fill', '#FFFFFF');
+                                        textSvg.setAttribute('font-size', '14px');
+                                        textSvg.setAttribute('font-weight', 'bold');
+                                        textSvg.setAttribute('dominant-baseline', 'central');
+                                        textSvg.textContent = targetBranchName;
+                                        svgLayer.appendChild(textSvg);
+                                    }
+
+                                    if (displayDest) {
+                                        const clickZone = document.createElement('div');
+                                        clickZone.className = 'branch-clickable-zone';
+                                        clickZone.style.left = `${zoneLeft}px`;
+                                        clickZone.style.top = `${zoneTop}px`;
+                                        clickZone.style.width = `${zoneWidth}px`;
+                                        clickZone.style.height = `${zoneHeight}px`;
+                                        clickZone.onclick = (e) => {
+                                            e.stopPropagation();
+                                            activeLayouts[currentSystem] = `display/${displayDest}.csv`;
+                                            loadZaisen(currentSystem, stationId); 
+                                        };
+                                   
+                                        clickableLayer.appendChild(clickZone);
+                                    }
                                 }
                             }
-                        }
+                        });
                     }
 
                     // 駅の◯
@@ -1516,9 +1529,13 @@
 
                     let timeDiv = document.createElement('div');
                     timeDiv.className = 'min-cell-time';
-                    // 【要件】通過列車表示スタイル（細身・薄いグレー、取り消し線なし、"通"文字なし）
-                    if (item.isPassing) timeDiv.classList.add('is-passing');
-                    timeDiv.innerText = String(item.minute).padStart(2, '0');
+                    // 【要件】通過列車は(04)のようにカッコ書きにし、薄字で表示する。
+                    if (item.isPassing) {
+                        timeDiv.classList.add('is-passing');
+                        timeDiv.innerText = "(" + String(item.minute).padStart(2, '0') + ")";
+                    } else {
+                        timeDiv.innerText = String(item.minute).padStart(2, '0');
+                    }
 
                     cell.appendChild(noDiv);
                     cell.appendChild(timeDiv);
@@ -1587,7 +1604,7 @@
                 if (name) stIdxMap[name] = idx;
             });
 
-            // 【要件】上り列車の時刻表が正しい順序（下から上、終点から起点に向かう順）になるように並び順を制御する
+            // 上り列車の時刻表が正しい順序（下から上、終点から起点に向かう順）になるように並び順を制御する
             const comp = train.components.find(c => c.trainNo === trainNo);
             const isUp = comp && comp.dir === 'in';
 
@@ -1608,8 +1625,9 @@
                 let minIdx = Math.min(...validIdxs);
                 let maxIdx = Math.max(...validIdxs);
 
-                const isOrigin = (targetStIdx === minIdx);
-                const isTerminal = (targetStIdx === maxIdx);
+                // 【要件】上り列車・下り列車それぞれの進行方向に基づき、始発駅と終着駅の判定を正しく行う
+                const isOrigin = isUp ? (targetStIdx === maxIdx) : (targetStIdx === minIdx);
+                const isTerminal = isUp ? (targetStIdx === minIdx) : (targetStIdx === maxIdx);
 
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'train-timetable-row';
@@ -1637,7 +1655,7 @@
                     displayTime = `(${cleanPassTime}通)`;
                     timeSpan.classList.add('is-passing');
                 } else {
-                    // 【要件】始発駅の到着時刻・終着駅の発車時刻は非表示
+                    // 【要件】始発駅の到着時刻（isOrigin時着）・終着駅の発車時刻（isTerminal時発）は非表示
                     const arr = (stop['着'] && !isOrigin) ? stop['着'] + '着' : '';
                     const dep = (stop['発'] && !isTerminal) ? stop['発'] + '発' : '';
                     displayTime = [arr, dep].filter(t => t).join(' / ');
