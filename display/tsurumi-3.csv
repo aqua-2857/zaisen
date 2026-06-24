@@ -1,8 +1,8 @@
 路線ID,駅ID,分岐方向,分岐路線,表示先
-jreji,ji01,,,
-jreji,ji02,,,
-jreji,ji03,,,
-jreji,ji04,,,
-jreji,ji05,,,
-jreji,ji06,or,jreji0,tsurumi-1
+jreji1,ji01,,,
+jreji1,ji02,,,
+jreji1,ji03,,,
+jreji1,ji04,,,
+jreji1,ji05,,,
+jreji3,ji06,or,jreji1,tsurumi-1
 ,ji61,,,
