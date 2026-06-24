@@ -1,4 +1,8 @@
-路線系統,改正日,時刻表ID,開始日,終了日,例外ダイヤ名
-saikyo,2026-03-14,jreja,,,
-saikyo,2026-03-14,twr,,,
-saikyo,2026-03-14,twr,2026-08-15,2026-08-16,c108
+路線系統,改正日,運用表ID,時刻表ID,開始日,終了日,例外ダイヤ名
+saikyo,2026-03-14,jreja,jreja,,,
+saikyo,2026-03-14,jreja,twr,,,
+saikyo,2026-03-14,,twr,2026-08-15,2026-08-16,c108
+hae,2026-03-14,jreja,hae,,,
+tsurumi,2026-03-14,jreji,jreji,,,
+nanbuh,2026-03-14,jreji,jrejnh,,,
+tadami,2026-03-14,,tdm,,,
