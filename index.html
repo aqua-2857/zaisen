@@ -1457,15 +1457,18 @@
 
                         if (isPassing && !showPassing) return; 
 
-                        // 【要件】駅の時刻表において列車の始発駅の場合は到着時刻、終着駅の場合は発車時刻は表示しない。
-                        const isOrigin = (targetStIdx === minIdx);
-                        const isTerminal = (targetStIdx === maxIdx);
+                        // 【要件】駅時刻表での始発駅と終着駅の表示非表示ロジック（上り下り考慮）
+                        const isUp = (targetDir === 'in');
+                        const isOrigin = isUp ? (targetStIdx === maxIdx) : (targetStIdx === minIdx);
+                        const isTerminal = isUp ? (targetStIdx === minIdx) : (targetStIdx === maxIdx);
 
+                        // 始発駅の場合、到着時刻は表示せず、発車時刻は表示する
                         if (isOrigin && currentModalTimeType === 'arr' && !isPassing) {
-                            return; // 始発駅の到着時刻は非表示
+                            return; 
                         }
+                        // 終着駅の場合、発車時刻は表示せず、到着時刻は表示する
                         if (isTerminal && currentModalTimeType === 'dep' && !isPassing) {
-                            return; // 終着駅の発車時刻は非表示
+                            return; 
                         }
 
                         let timeStr = "";
@@ -1529,7 +1532,7 @@
 
                     let timeDiv = document.createElement('div');
                     timeDiv.className = 'min-cell-time';
-                    // 【要件】通過列車は(04)のようにカッコ書きにし、薄字で表示する。
+                    // 【要件】駅時刻表の通過列車は(04)のようにカッコ書きにし、薄字で表示する
                     if (item.isPassing) {
                         timeDiv.classList.add('is-passing');
                         timeDiv.innerText = "(" + String(item.minute).padStart(2, '0') + ")";
@@ -1649,10 +1652,9 @@
                 let displayTime = '';
                 
                 if (isPassing) {
-                    // 【要件】列車時刻表で通過の場合は(1234通)のようにコロンを省いて書く
+                    // 【要件】列車時刻表の通過時刻にもコロンを入れる (12:34通) の形に修正
                     let passTime = stop['発'] || stop['着'] || '--:--';
-                    let cleanPassTime = passTime.replace(':', '');
-                    displayTime = `(${cleanPassTime}通)`;
+                    displayTime = `(${passTime}通)`;
                     timeSpan.classList.add('is-passing');
                 } else {
                     // 【要件】始発駅の到着時刻（isOrigin時着）・終着駅の発車時刻（isTerminal時発）は非表示
