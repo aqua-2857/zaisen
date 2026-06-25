@@ -236,7 +236,7 @@
             align-items: center;
             justify-content: flex-end;
             width: 60px;
-            height: 50px;
+            height: 60px;
             pointer-events: auto; /* タップ可能に設定 */
             cursor: pointer;
         }
@@ -376,7 +376,7 @@
             background: var(--btn-color); color: white; border-color: var(--btn-color);
         }
         
-        /* 【要件】発車到着切替ボタンと通過列車表示は同じ高さの横一列に並べる。左に切替、右に通過有無。大きい枠（背景・枠線等）は不要 */
+        /* 【要件】発車到着切替ボタンと通過列車表示は同じ高さの横一列に並める。左に切替、右に通過有無。大きい枠（背景・枠線等）は不要 */
         .control-row-horizontal {
             display: flex;
             justify-content: space-between;
@@ -534,12 +534,42 @@
     <div id="train-modal" class="modal-overlay" style="display:none;" onclick="closeTrainModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
+                <!-- 【要件】一番右（閉じるボタンの左側）に投稿画面にいくボタンを配置 -->
                 <span id="train-modal-no" class="modal-header-title-left">列車番号</span>
+                <button id="btn-post-from-train-modal" style="margin-right: 35px; padding: 6px 12px; background: white; color: #111; border: none; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer;">運用投稿</button>
                 <button class="modal-close-btn" onclick="closeTrainModal()">×</button>
             </div>
             <div class="modal-scroll-body">
-                <div id="train-modal-unyo" class="train-modal-meta">運用番号: </div>
+                <!-- 【要件】運用番号の横に編成名を表示 -->
+                <div id="train-modal-unyo" class="train-modal-meta" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="train-modal-unyo-text">運用番号: </span>
+                    <span id="train-modal-formation-text" style="font-weight: bold; font-size: 1rem;"></span>
+                </div>
                 <div id="train-timetable-list" class="timetable-table"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編成投稿ポップアップモーダル -->
+    <div id="formation-modal" class="modal-overlay" style="display:none;" onclick="closeFormationModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-header-title-left">編成情報の投稿</span>
+                <button class="modal-close-btn" onclick="closeFormationModal()">×</button>
+            </div>
+            <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:12px;">
+                <div style="font-size:0.95rem;">列車番号: <span id="form-train-no" style="font-weight:bold;"></span></div>
+                <div style="font-size:0.95rem;">対象運用: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
+                <label style="display:flex; flex-direction:column; gap:6px; font-weight:bold; font-size:0.9rem; margin-top:5px;">
+                    編成を選択してください:
+                    <select id="select-formation-id" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;">
+                        <option value="">-- 編成を選択 --</option>
+                    </select>
+                </label>
+                <div style="display:flex; gap: 8px; margin-top:8px;">
+                    <button onclick="submitFormation()" style="flex: 1; padding:12px; background:var(--btn-color); color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer;">投稿する</button>
+                    <button id="btn-delete-post" onclick="deleteFormationPost()" style="flex: 1; padding:12px; background:#FF3B30; color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer; display:none;">投稿を取り消す</button>
+                </div>
             </div>
         </div>
     </div>
@@ -556,6 +586,14 @@
         // マージ後の列車タイムラインを保持するグローバル配列
         let globalTrains = []; 
         let loadedTimetablePaths = new Set(); // 重複ロード防止用キャッシュ
+
+        // 【要件】登録車両データ (zaisen - formation_id.csv) と投稿された目撃情報の格納用
+        let formationsList = []; // 登録車両マスタデータ
+        let formationsMapById = {}; // マスタキャッシュ用
+        let globalFormations = {}; // 本日の投稿データ
+
+        // ★ここに作成した「GASのウェブアプリURL」を貼り付けてください
+        const GAS_API_URL = ''; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
@@ -630,7 +668,90 @@
 
         async function initApp() {
             await loadMasters();
+            await loadFormationsCSV(); // 【要件】登録車両データの読み込みと編成IDマスタ化
             await loadInfoAndGenerateButtons();
+            await loadFormations(); // 【要件】スプレッドシート投稿データの読み込み
+        }
+
+        // 【要件】zaisen - formation_id.csv のロード。各編成に割り当てられた情報をマスタ配列化。
+        async function loadFormationsCSV() {
+            try {
+                const csvText = await safeFetch('zaisen - formation_id.csv');
+                const data = parseCSV(csvText);
+                formationsList = [];
+                formationsMapById = {};
+                data.forEach(row => {
+                    const rawId = row['編成ID'] || row['\ufeff編成ID'] || '';
+                    const id = rawId.trim();
+                    // 形式投稿分のデータなど「編成IDが空の行」はマスタとしての割り当てから除外
+                    if (id !== '') {
+                        const item = {
+                            id: id,
+                            name: (row['編成名'] || '').trim(),
+                            icon: (row['アイコン'] || '').trim(),
+                            color: (row['カラー'] || '').trim(),
+                            // カンマ区切りの複数運用グループを配列へ分割
+                            normalGps: (row['通常運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
+                            substituteGps: (row['代走運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
+                            notes: (row['編成特記事項'] || '').trim()
+                        };
+                        formationsList.push(item);
+                        formationsMapById[id] = item;
+                    }
+                });
+                console.log("[車両マスタ] 同期成功。登録編成数:", formationsList.length);
+            } catch (e) {
+                console.error("zaisen - formation_id.csvの読み込みに失敗しました:", e.message);
+            }
+        }
+
+        // 【要件】スプレッドシートから目撃情報をロード。日付が翌午前四時以降の投稿データのみ抽出
+        async function loadFormations() {
+            if (!GAS_API_URL) {
+                console.warn("[編成データ] GAS_API_URL が未設定のためローカル模擬モードで動作します。");
+                return;
+            }
+            try {
+                const res = await fetch(GAS_API_URL);
+                if (res.ok) {
+                    const rawData = await res.json();
+                    
+                    // 【要件】翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット
+                    let now = new Date();
+                    let opStart = new Date(now.getTime());
+                    if (now.getHours() < 4) {
+                        opStart.setDate(now.getDate() - 1);
+                    }
+                    opStart.setHours(4, 0, 0, 0);
+                    const opStartMs = opStart.getTime();
+
+                    globalFormations = {};
+                    Object.keys(rawData).forEach(unyoNo => {
+                        const post = rawData[unyoNo];
+                        if (post && post.timestamp >= opStartMs) {
+                            globalFormations[unyoNo] = post;
+                        }
+                    });
+                    console.log("[編成データ] 本日の最新有効投稿:", globalFormations);
+                }
+            } catch (e) {
+                console.error("[編成データ] 読み込みに失敗しました:", e);
+            }
+        }
+
+        // 運用に現在投稿されている編成の詳細データをマスタから結合して取得するヘルパー
+        function getUnyoPostInfo(unyoNo) {
+            if (!unyoNo || !globalFormations[unyoNo]) return null;
+            const post = globalFormations[unyoNo];
+            const formObj = formationsMapById[post.formationId];
+            if (!formObj) return null;
+            return {
+                id: post.formationId,
+                name: formObj.name,
+                icon: formObj.icon,
+                color: formObj.color,
+                isSubstitute: post.isSubstitute
+            };
         }
 
         function parseCSV(text) {
@@ -1098,6 +1219,7 @@
                     const currentLineColor = getLineColorById(currentRailId);
 
                     // 【要件】分岐方向、分岐路線、表示先は複数ある場合、「,」で区切っている。
+                    // 1つのセルにil,orなどと書かれている場合、両方とも配列に格納し複数表示を可能にする。
                     const branches = (row['分岐方向'] || '').split(',').map(s => s.trim()).filter(s => s);
                     const branchRouteIds = (row['分岐路線'] || '').split(',').map(s => s.trim());
                     const branchDisplayDests = (row['表示先'] || '').split(',').map(s => s.trim());
@@ -1117,7 +1239,7 @@
                         mainPath.setAttribute('fill', 'none');
                         svgLayer.appendChild(mainPath);
 
-                        // 各分岐方向について個別パス・表示名・タップ領域を生成する
+                        // 各分岐方向について個別のパス、表示名、タップ領域を生成（複数ある場合並列表示）
                         branches.forEach((branch, bIdx) => {
                             if (branch && branch !== 'ic' && branch !== 'oc') {
                                 const branchRouteId = branchRouteIds[bIdx] || '';
@@ -1250,7 +1372,7 @@
             // エリア重複判定用のスロット管理
             const trainSlots = {};
 
-            // 【要件】統合された globalTrains に含まれる「すべての」列車コンポーネント(comp)を漏れなく判定する
+            // 統合された globalTrains に含まれる「すべての」列車コンポーネント(comp)を漏れなく判定する
             globalTrains.forEach(train => {
                 train.components.forEach(comp => {
                     const dir = comp.dir;
@@ -1337,21 +1459,33 @@
             });
         }
 
-        // 列車アイコンの描画（【要件】アイコンがない場合は確実に unknown.png にフォールバックする img タグ構成）
+        // 列車アイコンの描画（【要件】運用投稿がある時、アイコンを指定画像に。無いときは元の運用Gpアイコン、無いときはunknown.png）
         function renderTrainIcon(train, comp, yPos, dir, lineX, stName, index = 0) {
             const container = document.createElement('div');
             container.className = 'train-container';
             
-            const displayNo = comp.trainNo; // 個別コンポーネントの列車番号を確実に表示
+            const displayNo = comp.trainNo; // 個別コンポーネントの列車番号を表示
+            
+            // 【要件】カラー列にある色を列車番号にも反映する
+            const postInfo = getUnyoPostInfo(train.unyoNo);
             
             const label = document.createElement('div');
             label.className = 'train-no-label';
             label.innerText = displayNo;
-            
-            // 【要件】列車アイコンがない場合は icon/unknown.png を確実に利用できるよう onerror を設定
+            if (postInfo && postInfo.color) {
+                label.style.color = postInfo.color;
+            }
+
             const icon = document.createElement('img');
             icon.className = 'train-icon';
-            icon.src = `icon/${train.unyoGp}.png`;
+
+            // 【要件】運用投稿がある場合：アイコン列のファイル名を icon/から差し替え。無い場合、投稿取り消し時は元通り
+            if (postInfo && postInfo.icon) {
+                icon.src = `icon/${postInfo.icon}.png`;
+            } else {
+                icon.src = `icon/${train.unyoGp}.png`;
+            }
+
             icon.onerror = function() {
                 this.onerror = null;
                 this.src = 'icon/unknown.png';
@@ -1359,8 +1493,45 @@
 
             container.appendChild(label);
             container.appendChild(icon);
+
+            // 【要件】運用投稿時、列車アイコンの下に編成名を表示（代走時はアスタリスクを右上に小さく付加）
+            if (postInfo && postInfo.name) {
+                const formLabel = document.createElement('div');
+                formLabel.style.cssText = `
+                    font-size: 9px;
+                    font-weight: bold;
+                    background-color: rgba(255, 255, 255, 0.85);
+                    padding: 1px 3px;
+                    border-radius: 3px;
+                    margin-top: 2px;
+                    white-space: nowrap;
+                    line-height: 1.1;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    position: relative;
+                `;
+                formLabel.innerText = postInfo.name;
+                
+                // 【要件】代走運用の時、位置情報画面においては編成番号の右上にアスタリスク
+                if (postInfo.isSubstitute) {
+                    const ast = document.createElement('span');
+                    ast.style.cssText = `
+                        font-size: 8px;
+                        font-weight: bold;
+                        color: red;
+                        vertical-align: super;
+                        position: absolute;
+                        top: -1px;
+                        right: -4px;
+                    `;
+                    ast.innerText = '*';
+                    formLabel.appendChild(ast);
+                    formLabel.style.paddingRight = '6px';
+                }
+                
+                container.appendChild(formLabel);
+            }
             
-            // 【要件】列車をタップしたらその列車の時刻表を表示する。
+            // 列車をタップしたらその列車の時刻表を表示
             container.onclick = (e) => {
                 e.stopPropagation();
                 openTrainModal(train, displayNo);
@@ -1457,7 +1628,7 @@
 
                         if (isPassing && !showPassing) return; 
 
-                        // 【要件】駅時刻表での始発駅と終着駅の表示非表示ロジック（上り下り考慮）
+                        // 駅時刻表での始発駅と終着駅の表示非表示ロジック（上り下り考慮）
                         const isUp = (targetDir === 'in');
                         const isOrigin = isUp ? (targetStIdx === maxIdx) : (targetStIdx === minIdx);
                         const isTerminal = isUp ? (targetStIdx === minIdx) : (targetStIdx === maxIdx);
@@ -1520,7 +1691,6 @@
                     let cell = document.createElement('div');
                     cell.className = 'min-cell';
                     
-                    // 【要件】駅時刻表において分をタップしたとき、その列車の時刻表を表示する。
                     cell.onclick = () => {
                         closeModal();
                         openTrainModal(item.rawTrain, item.trainNo);
@@ -1530,14 +1700,31 @@
                     noDiv.className = 'min-cell-no';
                     noDiv.innerText = item.trainNo;
 
+                    // 【要件】運用投稿がある時、駅時刻表の時刻と列番にカラー列の色を反映
+                    const postInfo = getUnyoPostInfo(item.rawTrain.unyoNo);
+                    if (postInfo && postInfo.color) {
+                        noDiv.style.color = postInfo.color;
+                    }
+
                     let timeDiv = document.createElement('div');
                     timeDiv.className = 'min-cell-time';
-                    // 【要件】駅時刻表の通過列車は(04)のようにカッコ書きにし、薄字で表示する
+                    if (postInfo && postInfo.color) {
+                        timeDiv.style.color = postInfo.color;
+                    }
+
+                    // 通過駅の表示処理
                     if (item.isPassing) {
                         timeDiv.classList.add('is-passing');
                         timeDiv.innerText = "(" + String(item.minute).padStart(2, '0') + ")";
                     } else {
                         timeDiv.innerText = String(item.minute).padStart(2, '0');
+                    }
+
+                    // 【要件】代走運用の時、駅時刻表では時刻の右上にアスタリスクを表示
+                    if (postInfo && postInfo.isSubstitute) {
+                        timeDiv.style.position = 'relative';
+                        timeDiv.style.paddingRight = '5px';
+                        timeDiv.innerHTML = timeDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; vertical-align: super; position: absolute; top: -1px; right: -2px;">*</span>';
                     }
 
                     cell.appendChild(noDiv);
@@ -1595,8 +1782,41 @@
             // 【要件】ヘッダータイトルは列車番号（例: "1234G"）のみを左揃えで大きく表示
             document.getElementById('train-modal-no').innerText = trainNo;
             
-            // 【要件】運用番号は運用番号のみ表示。運用Gp(アルファベット)は内部のみで使用し非表示
-            document.getElementById('train-modal-unyo').innerText = `運用番号: ${train.unyoNo || 'なし'}`;
+            // 【要件】運用番号は運用番号のみ表示。Gp表記は内部でのみ使用
+            document.getElementById('train-modal-unyo-text').innerText = `運用番号: ${train.unyoNo || 'なし'}`;
+
+            // 【要件】カラー列にある色を列車時刻表のヘッダー色（background-color）にも適用
+            const postInfo = getUnyoPostInfo(train.unyoNo);
+            const headerEl = document.querySelector('#train-modal .modal-header');
+            
+            if (postInfo && postInfo.color) {
+                headerEl.style.backgroundColor = postInfo.color;
+            } else {
+                headerEl.style.backgroundColor = 'var(--header-bg)';
+            }
+
+            // 【要件】列車時刻表では運用番号の横に編成名を表示（代走時は後ろに「*」を付与）
+            const formTextEl = document.getElementById('train-modal-formation-text');
+            if (postInfo && postInfo.name) {
+                formTextEl.innerText = postInfo.name + (postInfo.isSubstitute ? ' *' : '');
+                if (postInfo.color) {
+                    formTextEl.style.color = postInfo.color;
+                }
+            } else {
+                formTextEl.innerText = '';
+            }
+
+            // 【要件】一番右の「運用投稿」ボタンの表示制御
+            const postBtn = document.getElementById('btn-post-from-train-modal');
+            if (train.unyoNo) {
+                postBtn.style.display = 'block';
+                postBtn.onclick = () => {
+                    closeTrainModal();
+                    openFormationModal(train.unyoNo, trainNo, train.unyoGp);
+                };
+            } else {
+                postBtn.style.display = 'none';
+            }
 
             const listContainer = document.getElementById('train-timetable-list');
             listContainer.innerHTML = '';
@@ -1628,14 +1848,13 @@
                 let minIdx = Math.min(...validIdxs);
                 let maxIdx = Math.max(...validIdxs);
 
-                // 【要件】上り列車・下り列車それぞれの進行方向に基づき、始発駅と終着駅の判定を正しく行う
+                // 上り列車・下り列車それぞれの進行方向に基づき、始発駅と終着駅の判定を正しく行う
                 const isOrigin = isUp ? (targetStIdx === maxIdx) : (targetStIdx === minIdx);
                 const isTerminal = isUp ? (targetStIdx === minIdx) : (targetStIdx === maxIdx);
 
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'train-timetable-row';
                 
-                // 【要件】列車時刻表において駅をタップしたとき、その駅の時刻表を表示する。
                 rowDiv.onclick = () => {
                     closeTrainModal();
                     openTimetableModal(sId, sName);
@@ -1652,12 +1871,11 @@
                 let displayTime = '';
                 
                 if (isPassing) {
-                    // 【要件】列車時刻表の通過時刻にもコロンを入れる (12:34通) の形に修正
+                    // 【要件】列車時刻表の通過時刻にもコロンを入れる (12:34通) の形で表示
                     let passTime = stop['発'] || stop['着'] || '--:--';
                     displayTime = `(${passTime}通)`;
                     timeSpan.classList.add('is-passing');
                 } else {
-                    // 【要件】始発駅の到着時刻（isOrigin時着）・終着駅の発車時刻（isTerminal時発）は非表示
                     const arr = (stop['着'] && !isOrigin) ? stop['着'] + '着' : '';
                     const dep = (stop['発'] && !isTerminal) ? stop['発'] + '発' : '';
                     displayTime = [arr, dep].filter(t => t).join(' / ');
@@ -1678,6 +1896,150 @@
 
         function closeTrainModal() {
             document.getElementById('train-modal').style.display = 'none';
+        }
+
+        // --- 編成投稿用のモーダル制御ロジック群 ---
+        function openFormationModal(unyoNo, trainNo, unyoGp) {
+            document.getElementById('form-train-no').innerText = trainNo;
+            document.getElementById('form-unyo-no').innerText = unyoNo;
+            
+            const selectEl = document.getElementById('select-formation-id');
+            selectEl.innerHTML = '<option value="">-- 編成を選択 --</option>';
+
+            // 【要件】編成に登録された通常運用Gpまたは代走運用Gpに合致する編成のみ選択肢に表示
+            const allowedFormations = formationsList.filter(form => {
+                return form.normalGps.includes(unyoGp) || form.substituteGps.includes(unyoGp);
+            });
+
+            allowedFormations.forEach(form => {
+                // 代走運用の判定 (代走運用Gpには入っているが、通常運用Gpには入っていない)
+                const isSub = form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
+                
+                const opt = document.createElement('option');
+                opt.value = form.id;
+                opt.innerText = `${form.name} ${isSub ? '[代走]' : ''}`;
+                selectEl.appendChild(opt);
+            });
+
+            // 既存の投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
+            const currentPost = globalFormations[unyoNo];
+            const deleteBtn = document.getElementById('btn-delete-post');
+            
+            if (currentPost) {
+                selectEl.value = currentPost.formationId;
+                deleteBtn.style.display = 'block';
+            } else {
+                deleteBtn.style.display = 'none';
+            }
+
+            document.getElementById('formation-modal').style.display = 'flex';
+        }
+
+        function closeFormationModal() {
+            document.getElementById('formation-modal').style.display = 'none';
+        }
+
+        async function submitFormation() {
+            const unyoNo = document.getElementById('form-unyo-no').innerText;
+            const trainNo = document.getElementById('form-train-no').innerText;
+            const selectEl = document.getElementById('select-formation-id');
+            const formationId = selectEl.value;
+
+            if (!formationId) {
+                alert("編成を選択してください。");
+                return;
+            }
+
+            const formation = formationsMapById[formationId];
+            if (!formation) return;
+
+            // 投稿ターゲット列車の運用グループを取得
+            let targetUnyoGp = '';
+            const matchedTrain = globalTrains.find(t => t.unyoNo === unyoNo);
+            if (matchedTrain) {
+                targetUnyoGp = matchedTrain.unyoGp;
+            }
+
+            // 代走フラグの最終算出
+            const isSub = formation.substituteGps.includes(targetUnyoGp) && !formation.normalGps.includes(targetUnyoGp);
+
+            // GASのウェブアプリURLが未貼付けの場合の、ローカル模擬テスト動作
+            if (!GAS_API_URL) {
+                globalFormations[unyoNo] = {
+                    formationId: formationId,
+                    formationName: formation.name,
+                    isSubstitute: isSub,
+                    timestamp: Date.now()
+                };
+                updateTrainPositions();
+                closeFormationModal();
+                alert("[テスト模擬保存] GAS_API_URLが未設定のためメモリに一次保存しました（リロードすると消えます）");
+                return;
+            }
+
+            const loader = document.getElementById('loading-screen');
+            if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
+
+            try {
+                // CORS制限を安全に回避するため、GET型のパラメータ分岐でGASへ送信
+                const url = `${GAS_API_URL}?action=post&unyoNo=${encodeURIComponent(unyoNo)}&formationId=${encodeURIComponent(formationId)}&formationName=${encodeURIComponent(formation.name)}&isSubstitute=${isSub}`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const resData = await res.json();
+                    if (resData.status === "success") {
+                        await loadFormations(); // 投稿データを再読込して画面更新
+                        updateTrainPositions();
+                        closeFormationModal();
+                    } else {
+                        alert("サーバー側でエラーが発生しました。");
+                    }
+                } else {
+                    alert("GASとの通信に失敗しました。");
+                }
+            } catch (e) {
+                console.error("[編成投稿] エラー:", e);
+                alert("送信中に例外エラーが発生しました。");
+            } finally {
+                if (loader) { loader.style.display = 'none'; }
+            }
+        }
+
+        // 【要件】運用投稿の取り消しアクション処理
+        async function deleteFormationPost() {
+            const unyoNo = document.getElementById('form-unyo-no').innerText;
+
+            if (!GAS_API_URL) {
+                delete globalFormations[unyoNo];
+                updateTrainPositions();
+                closeFormationModal();
+                alert("[テスト模擬取消] メモリから削除しました。");
+                return;
+            }
+
+            const loader = document.getElementById('loading-screen');
+            if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
+
+            try {
+                const url = `${GAS_API_URL}?action=delete&unyoNo=${encodeURIComponent(unyoNo)}`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const resData = await res.json();
+                    if (resData.status === "success") {
+                        await loadFormations();
+                        updateTrainPositions();
+                        closeFormationModal();
+                    } else {
+                        alert("取消処理中にサーバー側エラーが発生しました。");
+                    }
+                } else {
+                    alert("GASとの通信に失敗しました。");
+                }
+            } catch (e) {
+                console.error("[編成取消] エラー:", e);
+                alert("通信エラーが発生しました。");
+            } finally {
+                if (loader) { loader.style.display = 'none'; }
+            }
         }
     </script>
 </body>
