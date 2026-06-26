@@ -588,8 +588,8 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // デプロイいただいたウェブアプリURLを直結
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzPgh91gCX121YZUZH97XN7tjPq6rw31ErItY2N6lTVJ9Jl5PU3f_KiX5xKjZ9jmQUIyQ/exec'; 
+        // 更新いただいた新しいウェブアプリURLを完全に直結
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbw_DX9vo1NnWnVxgLURiK_C1p-nhjjJX5lrBPx72lkFh_vmN7Qs4M7LkinT_EKTMAyM7g/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
@@ -1207,11 +1207,12 @@
                     const currentRailId = row['路線ID'];
                     const currentLineColor = getLineColorById(currentRailId);
 
-                    // 分岐方向で一つのセルにil,orなどと書かれている場合、両方表示する
+                    // 分岐方向、分岐路線、表示先は複数ある場合、「,」で区切っている。
                     const branches = (row['分岐方向'] || '').split(',').map(s => s.trim()).filter(s => s);
                     const branchRouteIds = (row['分岐路線'] || '').split(',').map(s => s.trim());
                     const branchDisplayDests = (row['表示先'] || '').split(',').map(s => s.trim());
 
+                    // 本線を描くのは次の駅がある場合のみ
                     if (index < currentStations.length - 1) {
                         const nextY = (index + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
 
@@ -1226,82 +1227,82 @@
                         mainPath.setAttribute('stroke-width', LINE_WIDTH);
                         mainPath.setAttribute('fill', 'none');
                         svgLayer.appendChild(mainPath);
-
-                        branches.forEach((branch, bIdx) => {
-                            if (branch && branch !== 'ic' && branch !== 'oc') {
-                                const branchRouteId = branchRouteIds[bIdx] || '';
-                                const targetBranchName = getRouteNameById(branchRouteId);
-                                const branchLineColor = getLineColorById(branchRouteId);
-                                const displayDest = branchDisplayDests[bIdx] || '';
-
-                                const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                                let branchD = '';
-                                let textX = 0;
-                                let textY = 0;
-                                let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
-                                if (branch === 'il') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
-                                    textX = 20; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = 0; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
-                                    zoneWidth = lineX; zoneHeight = 50;
-                                } else if (branch === 'ir') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L ${screenWidth} ${currentY - ROW_HALF_HEIGHT}`;
-                                    textX = lineX + 40; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = lineX;
-                                    zoneTop = currentY - ROW_HALF_HEIGHT - 20;
-                                    zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                                } else if (branch === 'ol') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L 0 ${currentY + ROW_HALF_HEIGHT}`;
-                                    textX = 20; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = 0; zoneTop = currentY + 15;
-                                    zoneWidth = lineX; zoneHeight = 50;
-                                } else if (branch === 'or') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L ${screenWidth} ${currentY + ROW_HALF_HEIGHT}`;
-                                    textX = lineX + 40; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = lineX; zoneTop = currentY + 15;
-                                    zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                                }
-
-                                if (branchD) {
-                                    branchPath.setAttribute('d', branchD);
-                                    branchPath.setAttribute('stroke', branchLineColor);
-                                    branchPath.setAttribute('stroke-width', LINE_WIDTH);
-                                    branchPath.setAttribute('fill', 'none');
-                                    svgLayer.appendChild(branchPath);
-
-                                    if (targetBranchName) {
-                                        const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                                        textSvg.setAttribute('x', textX);
-                                        textSvg.setAttribute('y', (textY - 1).toString());
-                                        textSvg.setAttribute('fill', '#FFFFFF');
-                                        textSvg.setAttribute('font-size', '14px');
-                                        textSvg.setAttribute('font-weight', 'bold');
-                                        textSvg.setAttribute('dominant-baseline', 'central');
-                                        textSvg.textContent = targetBranchName;
-                                        svgLayer.appendChild(textSvg);
-                                    }
-
-                                    if (displayDest) {
-                                        const clickZone = document.createElement('div');
-                                        clickZone.className = 'branch-clickable-zone';
-                                        clickZone.style.left = `${zoneLeft}px`;
-                                        clickZone.style.top = `${zoneTop}px`;
-                                        clickZone.style.width = `${zoneWidth}px`;
-                                        clickZone.style.height = `${zoneHeight}px`;
-                                        clickZone.onclick = (e) => {
-                                            e.stopPropagation();
-                                            activeLayouts[currentSystem] = `display/${displayDest}.csv`;
-                                            loadZaisen(currentSystem, stationId); 
-                                        };
-                                   
-                                        clickableLayer.appendChild(clickZone);
-                                    }
-                                }
-                            }
-                        });
                     }
 
-                    // 駅の◯
+                    // 【要件】分岐方向の描画は、全駅（一番上の駅や一番下の駅も含む）で分岐指定があれば実行する
+                    branches.forEach((branch, bIdx) => {
+                        if (branch && branch !== 'ic' && branch !== 'oc') {
+                            const branchRouteId = branchRouteIds[bIdx] || '';
+                            const targetBranchName = getRouteNameById(branchRouteId);
+                            const branchLineColor = getLineColorById(branchRouteId);
+                            const displayDest = branchDisplayDests[bIdx] || '';
+
+                            const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                            let branchD = '';
+                            let textX = 0;
+                            let textY = 0;
+                            let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
+                            if (branch === 'il') {
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
+                                textX = 20; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
+                                zoneLeft = 0; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
+                                zoneWidth = lineX; zoneHeight = 50;
+                            } else if (branch === 'ir') {
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L ${screenWidth} ${currentY - ROW_HALF_HEIGHT}`;
+                                textX = lineX + 40; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
+                                zoneLeft = lineX;
+                                zoneTop = currentY - ROW_HALF_HEIGHT - 20;
+                                zoneWidth = screenWidth - lineX; zoneHeight = 50;
+                            } else if (branch === 'ol') {
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L 0 ${currentY + ROW_HALF_HEIGHT}`;
+                                textX = 20; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
+                                zoneLeft = 0; zoneTop = currentY + 15;
+                                zoneWidth = lineX; zoneHeight = 50;
+                            } else if (branch === 'or') {
+                                branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L ${screenWidth} ${currentY + ROW_HALF_HEIGHT}`;
+                                textX = lineX + 40; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
+                                zoneLeft = lineX; zoneTop = currentY + 15;
+                                zoneWidth = screenWidth - lineX; zoneHeight = 50;
+                            }
+
+                            if (branchD) {
+                                branchPath.setAttribute('d', branchD);
+                                branchPath.setAttribute('stroke', branchLineColor);
+                                branchPath.setAttribute('stroke-width', LINE_WIDTH);
+                                branchPath.setAttribute('fill', 'none');
+                                svgLayer.appendChild(branchPath);
+
+                                if (targetBranchName) {
+                                    const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                                    textSvg.setAttribute('x', textX);
+                                    textSvg.setAttribute('y', (textY - 1).toString());
+                                    textSvg.setAttribute('fill', '#FFFFFF');
+                                    textSvg.setAttribute('font-size', '14px');
+                                    textSvg.setAttribute('font-weight', 'bold');
+                                    textSvg.setAttribute('dominant-baseline', 'central');
+                                    textSvg.textContent = targetBranchName;
+                                    svgLayer.appendChild(textSvg);
+                                }
+
+                                if (displayDest) {
+                                    const clickZone = document.createElement('div');
+                                    clickZone.className = 'branch-clickable-zone';
+                                    clickZone.style.left = `${zoneLeft}px`;
+                                    clickZone.style.top = `${zoneTop}px`;
+                                    clickZone.style.width = `${zoneWidth}px`;
+                                    clickZone.style.height = `${zoneHeight}px`;
+                                    clickZone.onclick = (e) => {
+                                        e.stopPropagation();
+                                        activeLayouts[currentSystem] = `display/${displayDest}.csv`;
+                                        loadZaisen(currentSystem, stationId); 
+                                    };
+                               
+                                    clickableLayer.appendChild(clickZone);
+                                }
+                            }
+                        }
+                    });
+
                     const stationDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     stationDot.setAttribute('cx', lineX);
                     stationDot.setAttribute('cy', currentY);
@@ -1355,7 +1356,6 @@
             const nowSec = new Date().getTime() / 1000;
             const lineX = getLineX();
 
-            // エリア重複判定用のスロット管理
             const trainSlots = {};
 
             globalTrains.forEach(train => {
@@ -1373,7 +1373,7 @@
                         const stName = stationsMap[item.st['駅ID']];
                         if (!stName) return;
                         
-                        const stop = comp.stops[stName]; // 該当方向コンポーネント(comp)の時刻を参照
+                        const stop = comp.stops[stName]; 
                         if (!stop) return;
 
                         let arr = timeToSeconds(stop['着']);
@@ -1395,7 +1395,6 @@
                     for (let k = 0; k < points.length; k++) {
                         const current = points[k];
 
-                        // 1. 駅停車中判定
                         if (nowSec >= current.arrSec && nowSec < current.depSec) {
                             const key = `station_${current.stName}_${dir}`;
                             if (!trainSlots[key]) trainSlots[key] = [];
@@ -1410,7 +1409,6 @@
                             return; 
                         }
 
-                        // 2. 駅間走行中判定
                         if (k < points.length - 1) {
                             const next = points[k + 1];
                             if (nowSec >= current.depSec && nowSec < next.arrSec) {
@@ -1432,7 +1430,6 @@
                 });
             });
 
-            // 同一エリア内の列車同士を横に並べて描画
             Object.keys(trainSlots).forEach(key => {
                 const list = trainSlots[key];
                 list.sort((a, b) => a.sortTime - b.sortTime);
@@ -1443,14 +1440,12 @@
             });
         }
 
-        // 列車アイコンの描画（運用投稿がある時、アイコンを指定画像に。無いときは元の運用Gpアイコン、無いときはunknown.png）
         function renderTrainIcon(train, comp, yPos, dir, lineX, stName, index = 0) {
             const container = document.createElement('div');
             container.className = 'train-container';
             
             const displayNo = comp.trainNo; 
             
-            // 投稿にカラー列の色がある場合、列車番号にも反映する
             const postInfo = getUnyoPostInfo(train.unyoNo);
             
             const label = document.createElement('div');
@@ -1463,7 +1458,6 @@
             const icon = document.createElement('img');
             icon.className = 'train-icon';
 
-            // 運用投稿がある場合：アイコン列のファイル名を icon/から差し替え。無い場合、投稿取り消し時は元通り
             if (postInfo && postInfo.icon) {
                 icon.src = `icon/${postInfo.icon}.png`;
             } else {
@@ -1478,7 +1472,6 @@
             container.appendChild(label);
             container.appendChild(icon);
 
-            // 運用投稿時、列車アイコンの下に編成名を表示（代走時はアスタリスクを右上に小さく付加）
             if (postInfo && postInfo.name) {
                 const formLabel = document.createElement('div');
                 formLabel.style.cssText = `
@@ -1495,7 +1488,6 @@
                 `;
                 formLabel.innerText = postInfo.name;
                 
-                // 代走運用の時、位置情報画面においては編成番号の右上にアスタリスク
                 if (postInfo.isSubstitute) {
                     const ast = document.createElement('span');
                     ast.style.cssText = `
@@ -1515,7 +1507,6 @@
                 container.appendChild(formLabel);
             }
             
-            // 列車をタップしたらその列車の時刻表を表示
             container.onclick = (e) => {
                 e.stopPropagation();
                 openTrainModal(train, displayNo);
@@ -1538,7 +1529,6 @@
             currentModalStationId = stationId;
             currentModalStationName = stationName;
             
-            // 駅時刻表を開いた時のヘッダーは中央揃えにして駅名に置き換え
             document.getElementById('modal-station-name').innerText = stationName;
             
             if (currentStations.length > 0) {
@@ -1611,27 +1601,31 @@
 
                         if (isPassing && !showPassing) return; 
 
-                        // 駅時刻表で列車の終着駅は到着時刻は表示する。発車時刻は表示しない。始発駅は出発時刻を表示し到着は非表示。
+                        // 上り下りを完全に考慮した始発・終点駅フラグ判定
                         const isUp = (targetDir === 'in');
                         const isOrigin = isUp ? (targetStIdx === maxIdx) : (targetStIdx === minIdx);
                         const isTerminal = isUp ? (targetStIdx === minIdx) : (targetStIdx === maxIdx);
-
-                        if (isOrigin && currentModalTimeType === 'arr' && !isPassing) {
-                            return; 
-                        }
-                        if (isTerminal && currentModalTimeType === 'dep' && !isPassing) {
-                            return; 
-                        }
 
                         let timeStr = "";
                         if (isPassing) {
                             timeStr = estimatePassingTime(comp, targetStIdx, stIdxMap);
                         } else {
+                            // 【要件】終着駅での発車、始発駅での到着を求められた場合でも、存在する時刻をフォールバック表示（時刻の完全非表示化バグを回避）
                             if (currentModalTimeType === 'arr') {
                                 timeStr = stop['着'] || stop['発']; 
                             } else {
                                 timeStr = stop['発'] || stop['着'];
                             }
+                        }
+
+                        // 各駅での発着非表示要件
+                        // 始発駅の場合、到着予定時刻は不表示（ただし通過でない実停車列車のみ）
+                        if (isOrigin && currentModalTimeType === 'arr' && !isPassing) {
+                            timeStr = ""; 
+                        }
+                        // 終着駅の場合、発車予定時刻は不表示（ただし通過でない実停車列車のみ）
+                        if (isTerminal && currentModalTimeType === 'dep' && !isPassing) {
+                            timeStr = ""; 
                         }
 
                         if (timeStr) {
@@ -1681,7 +1675,6 @@
                     noDiv.className = 'min-cell-no';
                     noDiv.innerText = item.trainNo;
 
-                    // 運用に現在投稿されている編成のカラーを駅時刻表の時刻と列車番号の色にも適用する
                     const postInfo = getUnyoPostInfo(item.rawTrain.unyoNo);
 
                     if (postInfo && postInfo.color) {
@@ -1764,7 +1757,6 @@
             // ヘッダータイトルは列車番号のみを左揃えで大きく表示
             document.getElementById('train-modal-no').innerText = trainNo;
             
-            // 運用に現在投稿されている編成のカラーを列車時刻表のヘッダー色にも適用する
             const postInfo = getUnyoPostInfo(train.unyoNo);
             const headerEl = document.querySelector('#train-modal .modal-header');
             
@@ -1853,7 +1845,7 @@
                 let displayTime = '';
                 
                 if (isPassing) {
-                    // 列車時刻表の通過時刻にもコロンを入れる (12:34通) の形で表示
+                    // 【要件】列車時刻表の通過時刻にもコロンを入れる (12:34通) の形で表示
                     let passTime = stop['発'] || stop['着'] || '--:--';
                     displayTime = `(${passTime}通)`;
                     timeSpan.classList.add('is-passing');
@@ -1923,7 +1915,6 @@
 
         async function submitFormation() {
             const unyoNo = document.getElementById('form-unyo-no').innerText;
-            const trainNo = document.getElementById('form-train-no').innerText;
             const selectEl = document.getElementById('select-formation-id');
             const formationId = selectEl.value;
 
@@ -1944,19 +1935,6 @@
 
             // 代走フラグの最終算出
             const isSub = formation.substituteGps.includes(targetUnyoGp) && !formation.normalGps.includes(targetUnyoGp);
-
-            if (!GAS_API_URL) {
-                globalFormations[unyoNo] = {
-                    formationId: formationId,
-                    formationName: formation.name,
-                    isSubstitute: isSub,
-                    timestamp: Date.now()
-                };
-                updateTrainPositions();
-                closeFormationModal();
-                alert("[テスト模擬保存] GAS_API_URLが未設定のためメモリに一次保存しました（リロードすると消えます）");
-                return;
-            }
 
             const loader = document.getElementById('loading-screen');
             if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
@@ -1988,14 +1966,6 @@
         // 運用投稿の取り消しアクション処理
         async function deleteFormationPost() {
             const unyoNo = document.getElementById('form-unyo-no').innerText;
-
-            if (!GAS_API_URL) {
-                delete globalFormations[unyoNo];
-                updateTrainPositions();
-                closeFormationModal();
-                alert("[テスト模擬取消] メモリから削除しました。");
-                return;
-            }
 
             const loader = document.getElementById('loading-screen');
             if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
