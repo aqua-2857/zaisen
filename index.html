@@ -533,14 +533,14 @@
     <!-- 列車時刻表ポップアップモーダル -->
     <div id="train-modal" class="modal-overlay" style="display:none;" onclick="closeTrainModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <!-- 【要件】一番右（閉じるボタンの左側）に投稿画面にいくボタンを配置 -->
+            <div class="modal-header" id="train-modal-header">
                 <span id="train-modal-no" class="modal-header-title-left">列車番号</span>
+                <!-- 【要件】列車時刻表の一番右には投稿画面にいくボタンを表示したい。 -->
                 <button id="btn-post-from-train-modal" style="margin-right: 35px; padding: 6px 12px; background: white; color: #111; border: none; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer;">運用投稿</button>
                 <button class="modal-close-btn" onclick="closeTrainModal()">×</button>
             </div>
             <div class="modal-scroll-body">
-                <!-- 【要件】運用番号の横に編成名を表示 -->
+                <!-- 【要件】列車時刻表では運用番号の横に編成名を表示 -->
                 <div id="train-modal-unyo" class="train-modal-meta" style="display: flex; justify-content: space-between; align-items: center;">
                     <span id="train-modal-unyo-text">運用番号: </span>
                     <span id="train-modal-formation-text" style="font-weight: bold; font-size: 1rem;"></span>
@@ -592,14 +592,14 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // ★ここに作成した「GASのウェブアプリURL」を貼り付けました
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyI6p2XW3Y_T6x6XJ_sL_7K_9p8T3f2l7f2n_T_L_5K/exec'; 
+        // ★ここに作成した「GASのウェブアプリURL」を貼り付けてください
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzPgh91gCX121YZUZH97XN7tjPq6rw31ErItY2N6lTVJ9Jl5PU3f_KiX5xKjZ9jmQUIyQ/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
         const ROW_HALF_HEIGHT = 42; 
         
-        // 【要件】画面左의駅名スペースを確保しつつ、右側の表示が狭くなりすぎない絶妙な配置（幅の65%に設定）
+        // 【要件】画面左の駅名スペースを確保しつつ、右側の表示が狭くなりすぎない絶妙な配置（幅の65%に設定）
         function getLineX() {
             const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
             return screenWidth * 0.65;
@@ -668,90 +668,8 @@
 
         async function initApp() {
             await loadMasters();
-            await loadFormationsCSV(); // 【要件】登録車両データの読み込みと編成IDマスタ化
+            await loadFormationsCSV(); // 【要件】登録車両データの読み込み
             await loadInfoAndGenerateButtons();
-            await loadFormations(); // 【要件】スプレッドシート投稿データの読み込み
-        }
-
-        // 【要件】zaisen - formation_id.csv のロード。各編成に割り当てられた情報をマスタ配列化。
-        async function loadFormationsCSV() {
-            try {
-                const csvText = await safeFetch('zaisen - formation_id.csv');
-                const data = parseCSV(csvText);
-                formationsList = [];
-                formationsMapById = {};
-                data.forEach(row => {
-                    const rawId = row['編成ID'] || row['\ufeff編成ID'] || '';
-                    const id = rawId.trim();
-                    // 形式投稿分のデータなど「編成IDが空の行」はマスタとしての割り当てから除外
-                    if (id !== '') {
-                        const item = {
-                            id: id,
-                            name: (row['編成名'] || '').trim(),
-                            icon: (row['アイコン'] || '').trim(),
-                            color: (row['カラー'] || '').trim(),
-                            // カンマ区切りの複数運用グループを配列へ分割
-                            normalGps: (row['通常運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
-                            substituteGps: (row['代走運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
-                            notes: (row['編成特記事項'] || '').trim()
-                        };
-                        formationsList.push(item);
-                        formationsMapById[id] = item;
-                    }
-                });
-                console.log("[車両マスタ] 同期成功。登録編成数:", formationsList.length);
-            } catch (e) {
-                console.error("zaisen - formation_id.csvの読み込みに失敗しました:", e.message);
-            }
-        }
-
-        // 【要件】スプレッドシートから目撃情報をロード。日付が翌午前四時以降の投稿データのみ抽出
-        async function loadFormations() {
-            if (!GAS_API_URL) {
-                console.warn("[編成データ] GAS_API_URL が未設定のためローカル模擬モードで動作します。");
-                return;
-            }
-            try {
-                const res = await fetch(GAS_API_URL);
-                if (res.ok) {
-                    const rawData = await res.json();
-                    
-                    // 【要件】翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット
-                    let now = new Date();
-                    let opStart = new Date(now.getTime());
-                    if (now.getHours() < 4) {
-                        opStart.setDate(now.getDate() - 1);
-                    }
-                    opStart.setHours(4, 0, 0, 0);
-                    const opStartMs = opStart.getTime();
-
-                    globalFormations = {};
-                    Object.keys(rawData).forEach(unyoNo => {
-                        const post = rawData[unyoNo];
-                        if (post && post.timestamp >= opStartMs) {
-                            globalFormations[unyoNo] = post;
-                        }
-                    });
-                    console.log("[編成データ] 本日の最新有効投稿:", globalFormations);
-                }
-            } catch (e) {
-                console.error("[編成データ] 読み込みに失敗しました:", e);
-            }
-        }
-
-        // 運用に現在投稿されている編成の詳細データをマスタから結合して取得するヘルパー
-        function getUnyoPostInfo(unyoNo) {
-            if (!unyoNo || !globalFormations[unyoNo]) return null;
-            const post = globalFormations[unyoNo];
-            const formObj = formationsMapById[post.formationId];
-            if (!formObj) return null;
-            return {
-                id: post.formationId,
-                name: formObj.name,
-                icon: formObj.icon,
-                color: formObj.color,
-                isSubstitute: post.isSubstitute
-            };
         }
 
         function parseCSV(text) {
@@ -841,6 +759,87 @@
             } catch (e) {
                 console.error("info.csvの読み込みに失敗:", e.message);
             }
+        }
+
+        // 【要件】登録車両データ (zaisen - formation_id.csv) のロード。各編成に編成IDを付与して保持。
+        async function loadFormationsCSV() {
+            try {
+                const csvText = await safeFetch('zaisen - formation_id.csv');
+                const data = parseCSV(csvText);
+                formationsList = [];
+                formationsMapById = {};
+                data.forEach(row => {
+                    const rawId = row['編成ID'] || row['\ufeff編成ID'] || '';
+                    const id = rawId.trim();
+                    // 形式投稿分のデータなど「編成IDが空の行」はマスタとしての割り当てから除外
+                    if (id !== '') {
+                        const item = {
+                            id: id,
+                            name: (row['編成名'] || '').trim(),
+                            icon: (row['アイコン'] || '').trim(),
+                            color: (row['カラー'] || '').trim(),
+                            // カンマ区切りの複数運用グループを配列へ分割
+                            normalGps: (row['通常運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
+                            substituteGps: (row['代走運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
+                            notes: (row['編成特記事項'] || '').trim()
+                        };
+                        formationsList.push(item);
+                        formationsMapById[id] = item;
+                    }
+                });
+                console.log("[車両マスタ] 同期成功。登録編成数:", formationsList.length);
+            } catch (e) {
+                console.error("zaisen - formation_id.csvの読み込みに失敗しました:", e.message);
+            }
+        }
+
+        // 【要件】スプレッドシートから目撃情報をロード。日付が翌午前四時以降の投稿データのみ抽出
+        async function loadFormations() {
+            if (!GAS_API_URL) {
+                console.warn("[編成データ] GAS_API_URL が未設定のためローカル模擬モードで動作します。");
+                return;
+            }
+            try {
+                const res = await fetch(GAS_API_URL);
+                if (res.ok) {
+                    const rawData = await res.json();
+                    
+                    // 【要件】翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット
+                    let now = new Date();
+                    let opStart = new Date(now.getTime());
+                    if (now.getHours() < 4) {
+                        opStart.setDate(now.getDate() - 1);
+                    }
+                    opStart.setHours(4, 0, 0, 0);
+                    const opStartMs = opStart.getTime();
+
+                    globalFormations = {};
+                    Object.keys(rawData).forEach(unyoNo => {
+                        const post = rawData[unyoNo];
+                        if (post && post.timestamp >= opStartMs) {
+                            globalFormations[unyoNo] = post;
+                        }
+                    });
+                    console.log("[編成データ] 本日の最新有効投稿:", globalFormations);
+                }
+            } catch (e) {
+                console.error("[編成データ] 読み込みに失敗しました:", e);
+            }
+        }
+
+        // 運用に現在投稿されている編成の詳細データをマスタから結合して取得するヘルパー
+        function getUnyoPostInfo(unyoNo) {
+            if (!unyoNo || !globalFormations[unyoNo]) return null;
+            const post = globalFormations[unyoNo];
+            const formObj = formationsMapById[post.formationId];
+            if (!formObj) return null;
+            return {
+                id: post.formationId,
+                name: formObj.name,
+                icon: formObj.icon,
+                color: formObj.color,
+                isSubstitute: post.isSubstitute
+            };
         }
 
         function scrollToStation(stationId) {
@@ -953,7 +952,7 @@
 
                 const sysFolder = routeMaster['路線系統'] || 'saikyo';
                 
-                // 【要件】運用表は今まで時刻表IDだったが、zaisen - railroad_id.csvの運用表IDを代入する。
+                // 【要件】運用表は zaisen - railroad_id.csv の「運用表ID」を使用する
                 const opPrefix = routeMaster['運用表ID'] || routeMaster['時刻表ID'] || routeId;
                 const filePrefix = routeMaster['時刻表ID'] || routeId;
                 const systemRules = calendarData.filter(row => row['路線系統'] === sysFolder);
@@ -1156,181 +1155,7 @@
             return trains.filter(t => t.trainNo !== '');
         }
 
-        async function renderRoute() {
-            const layoutFile = activeLayouts[currentSystem];
-            if (!layoutFile) return;
-
-            try {
-                const textLayout = await safeFetch(layoutFile);
-                currentStations = parseCSV(textLayout);
-
-                const stationListDiv = document.getElementById('station-list');
-                const svgLayer = document.getElementById('svg-layer');
-                const clickableLayer = document.getElementById('clickable-layer');
-                const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
-                const lineX = getLineX();
-
-                stationListDiv.innerHTML = '';
-                svgLayer.innerHTML = '';
-                clickableLayer.innerHTML = '';
-                const totalHeight = currentStations.length * BLOCK_HEIGHT - ROW_HALF_HEIGHT * 2; 
-                svgLayer.setAttribute('height', totalHeight);
-                svgLayer.setAttribute('width', screenWidth);
-                svgLayer.setAttribute('viewBox', `0 0 ${screenWidth} ${totalHeight}`);
-                
-                currentStations.forEach((row, index) => {
-                    const stationId = row['駅ID'];
-                    if (!stationId) return;
-                    const stationName = stationsMap[stationId] || stationId;
-
-                    const blockDiv = document.createElement('div');
-                    blockDiv.className = 'station-block';
-
-                    const rowDiv = document.createElement('div');
-                    rowDiv.className = 'station-row';
-                    rowDiv.id = `station-row-${stationId}`;
-                    rowDiv.onclick = () => openTimetableModal(stationId, stationName);
-
-                    const nameContainer = document.createElement('div');
-                    nameContainer.className = 'station-name-container';
-                    
-                    const nameDiv = document.createElement('div');
-                    nameDiv.className = 'station-name';
-                    nameDiv.innerText = stationName;
-                    
-                    const dotIcon = document.createElement('div');
-                    dotIcon.className = 'station-icon-dot';
-                    dotIcon.innerText = '＞';
-
-                    nameContainer.appendChild(nameDiv);
-                    nameContainer.appendChild(dotIcon);
-                    rowDiv.appendChild(nameContainer);
-                    blockDiv.appendChild(rowDiv);
-
-                    if (index < currentStations.length - 1) {
-                        const betweenDiv = document.createElement('div');
-                        betweenDiv.className = 'between-row';
-                        blockDiv.appendChild(betweenDiv);
-                    }
-                    stationListDiv.appendChild(blockDiv);
-                    const currentY = index * BLOCK_HEIGHT + ROW_HALF_HEIGHT; 
-                    
-                    const currentRailId = row['路線ID'];
-                    const currentLineColor = getLineColorById(currentRailId);
-
-                    // 【要件】分岐方向、分岐路線、表示先は複数ある場合、「,」で区切っている。
-                    // 1つのセルにil,orなどと書かれている場合、両方とも配列に格納し複数表示を可能にする。
-                    const branches = (row['分岐方向'] || '').split(',').map(s => s.trim()).filter(s => s);
-                    const branchRouteIds = (row['分岐路線'] || '').split(',').map(s => s.trim());
-                    const branchDisplayDests = (row['表示先'] || '').split(',').map(s => s.trim());
-
-                    if (index < currentStations.length - 1) {
-                        const nextY = (index + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
-
-                        let mainD = `M ${lineX} ${nextY} L ${lineX} ${currentY}`;
-                        if (branches.includes('ic') || branches.includes('oc')) {
-                            mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + ROW_HALF_HEIGHT}`;
-                        }
-
-                        const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                        mainPath.setAttribute('d', mainD);
-                        mainPath.setAttribute('stroke', currentLineColor);
-                        mainPath.setAttribute('stroke-width', LINE_WIDTH);
-                        mainPath.setAttribute('fill', 'none');
-                        svgLayer.appendChild(mainPath);
-
-                        // 各分岐方向について個別のパス、表示名、タップ領域を生成（複数ある場合並列表示）
-                        branches.forEach((branch, bIdx) => {
-                            if (branch && branch !== 'ic' && branch !== 'oc') {
-                                const branchRouteId = branchRouteIds[bIdx] || '';
-                                const targetBranchName = getRouteNameById(branchRouteId);
-                                const branchLineColor = getLineColorById(branchRouteId);
-                                const displayDest = branchDisplayDests[bIdx] || '';
-
-                                const branchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                                let branchD = '';
-                                let textX = 0;
-                                let textY = 0;
-                                let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
-                                if (branch === 'il') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
-                                    textX = 20; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = 0; zoneTop = currentY - ROW_HALF_HEIGHT - 20;
-                                    zoneWidth = lineX; zoneHeight = 50;
-                                } else if (branch === 'ir') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L ${screenWidth} ${currentY - ROW_HALF_HEIGHT}`;
-                                    textX = lineX + 40; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = lineX;
-                                    zoneTop = currentY - ROW_HALF_HEIGHT - 20;
-                                    zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                                } else if (branch === 'ol') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L 0 ${currentY + ROW_HALF_HEIGHT}`;
-                                    textX = 20; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = 0; zoneTop = currentY + 15;
-                                    zoneWidth = lineX; zoneHeight = 50;
-                                } else if (branch === 'or') {
-                                    branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY + ROW_HALF_HEIGHT}, ${lineX + ROW_HALF_HEIGHT} ${currentY + ROW_HALF_HEIGHT} L ${screenWidth} ${currentY + ROW_HALF_HEIGHT}`;
-                                    textX = lineX + 40; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
-                                    zoneLeft = lineX; zoneTop = currentY + 15;
-                                    zoneWidth = screenWidth - lineX; zoneHeight = 50;
-                                }
-
-                                if (branchD) {
-                                    branchPath.setAttribute('d', branchD);
-                                    branchPath.setAttribute('stroke', branchLineColor);
-                                    branchPath.setAttribute('stroke-width', LINE_WIDTH);
-                                    branchPath.setAttribute('fill', 'none');
-                                    svgLayer.appendChild(branchPath);
-
-                                    if (targetBranchName) {
-                                        const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                                        textSvg.setAttribute('x', textX);
-                                        textSvg.setAttribute('y', (textY - 1).toString());
-                                        textSvg.setAttribute('fill', '#FFFFFF');
-                                        textSvg.setAttribute('font-size', '14px');
-                                        textSvg.setAttribute('font-weight', 'bold');
-                                        textSvg.setAttribute('dominant-baseline', 'central');
-                                        textSvg.textContent = targetBranchName;
-                                        svgLayer.appendChild(textSvg);
-                                    }
-
-                                    if (displayDest) {
-                                        const clickZone = document.createElement('div');
-                                        clickZone.className = 'branch-clickable-zone';
-                                        clickZone.style.left = `${zoneLeft}px`;
-                                        clickZone.style.top = `${zoneTop}px`;
-                                        clickZone.style.width = `${zoneWidth}px`;
-                                        clickZone.style.height = `${zoneHeight}px`;
-                                        clickZone.onclick = (e) => {
-                                            e.stopPropagation();
-                                            activeLayouts[currentSystem] = `display/${displayDest}.csv`;
-                                            loadZaisen(currentSystem, stationId); 
-                                        };
-                                   
-                                        clickableLayer.appendChild(clickZone);
-                                    }
-                                }
-                            }
-                        });
-                    }
-
-                    // 駅の◯
-                    const stationDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                    stationDot.setAttribute('cx', lineX);
-                    stationDot.setAttribute('cy', currentY);
-                    stationDot.setAttribute('r', (LINE_WIDTH / 2).toString()); 
-                    stationDot.setAttribute('fill', '#FFFFFF'); 
-                    stationDot.setAttribute('stroke', '#000000');
-                    stationDot.setAttribute('stroke-width', '3');
-                    svgLayer.appendChild(stationDot);
-                });
-
-                updateTrainPositions();
-            } catch(e) {
-                console.error("レイアウトファイルの読み込みに失敗しました:", e.message);
-            }
-        }
-
+        // 位置情報の路線情報の生成
         function updateTrainPositions() {
             if (!currentStations || !currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
@@ -1599,16 +1424,16 @@
 
                         if (isPassing && !showPassing) return; 
 
-                        // 駅時刻表での始発駅と終着駅の表示非表示ロジック（上り下り考慮）
+                        // 【要件】駅時刻表における列車の始発駅・終着駅の表示非表示ロジック（上り下り方向を正確に考慮）
                         const isUp = (targetDir === 'in');
                         const isOrigin = isUp ? (targetStIdx === maxIdx) : (targetStIdx === minIdx);
                         const isTerminal = isUp ? (targetStIdx === minIdx) : (targetStIdx === maxIdx);
 
-                        // 始発駅の場合、到着時刻は表示せず、発車時刻は表示する
+                        // 始発駅の場合、到着時刻は表示しない（発車時刻のみ表示）
                         if (isOrigin && currentModalTimeType === 'arr' && !isPassing) {
                             return; 
                         }
-                        // 終着駅の場合、発車時刻は表示せず、到着時刻は表示する
+                        // 終着駅の場合、発車時刻は表示しない（到着時刻のみ表示）
                         if (isTerminal && currentModalTimeType === 'dep' && !isPassing) {
                             return; 
                         }
@@ -1695,7 +1520,18 @@
                     if (postInfo && postInfo.isSubstitute) {
                         timeDiv.style.position = 'relative';
                         timeDiv.style.paddingRight = '5px';
-                        timeDiv.innerHTML = timeDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; vertical-align: super; position: absolute; top: -1px; right: -2px;">*</span>';
+                        const ast = document.createElement('span');
+                        ast.style.cssText = `
+                            font-size: 7px;
+                            font-weight: bold;
+                            color: red;
+                            vertical-align: super;
+                            position: absolute;
+                            top: -2px;
+                            right: -2px;
+                        `;
+                        ast.innerText = '*';
+                        timeDiv.appendChild(ast);
                     }
 
                     cell.appendChild(noDiv);
@@ -1758,7 +1594,7 @@
 
             // 【要件】カラー列にある色を列車時刻表のヘッダー色（background-color）にも適用
             const postInfo = getUnyoPostInfo(train.unyoNo);
-            const headerEl = document.querySelector('#train-modal .modal-header');
+            const headerEl = document.getElementById('train-modal-header');
             
             if (postInfo && postInfo.color) {
                 headerEl.style.backgroundColor = postInfo.color;
@@ -1766,7 +1602,7 @@
                 headerEl.style.backgroundColor = 'var(--header-bg)';
             }
 
-            // 【要件】列車時刻表では運用番号の横に編成名を表示（代走時は後ろに「*」を付与）
+            // 【要件】列車時刻表では運用番号の横に編成名を表示（代走時はアスタリスクを付与）
             const formTextEl = document.getElementById('train-modal-formation-text');
             if (postInfo && postInfo.name) {
                 formTextEl.innerText = postInfo.name + (postInfo.isSubstitute ? ' *' : '');
@@ -1775,6 +1611,7 @@
                 }
             } else {
                 formTextEl.innerText = '';
+                formTextEl.style.color = 'inherit';
             }
 
             // 【要件】一番右の「運用投稿」ボタンの表示制御
@@ -1847,6 +1684,7 @@
                     displayTime = `(${passTime}通)`;
                     timeSpan.classList.add('is-passing');
                 } else {
+                    // 始発駅の到着時刻・終着駅の発車時刻は非表示
                     const arr = (stop['着'] && !isOrigin) ? stop['着'] + '着' : '';
                     const dep = (stop['発'] && !isTerminal) ? stop['発'] + '発' : '';
                     displayTime = [arr, dep].filter(t => t).join(' / ');
@@ -1883,7 +1721,7 @@
             });
 
             allowedFormations.forEach(form => {
-                // 代走運用の判定 (代走運用Gpには入っているが、通常運用Gpには入っていない)
+                // 代走運用の判定 (代走運用Gpには入っているが、通常運用Gpには入っていない場合)
                 const isSub = form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
                 
                 const opt = document.createElement('option');
@@ -1931,7 +1769,7 @@
                 targetUnyoGp = matchedTrain.unyoGp;
             }
 
-            // 代走フラグの最終算出
+            // 代走フラグの最終算出（マスタ構成上の代走運用Gpに入っていて通常運用Gpに入っていないとき）
             const isSub = formation.substituteGps.includes(targetUnyoGp) && !formation.normalGps.includes(targetUnyoGp);
 
             // GASのウェブアプリURLが未貼付けの場合の、ローカル模擬テスト動作
