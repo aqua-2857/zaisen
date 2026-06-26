@@ -592,7 +592,7 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // ★ここに作成した「GASのウェブアプリURL」を貼り付けてください
+        // ★【更新】デプロイしていただいたウェブアプリURLを設定済み
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzPgh91gCX121YZUZH97XN7tjPq6rw31ErItY2N6lTVJ9Jl5PU3f_KiX5xKjZ9jmQUIyQ/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
@@ -670,6 +670,7 @@
             await loadMasters();
             await loadFormationsCSV(); // 【要件】登録車両データの読み込み
             await loadInfoAndGenerateButtons();
+            await loadFormations(); // 【要件】スプレッドシート投稿データの読み込み
         }
 
         function parseCSV(text) {
@@ -1684,7 +1685,6 @@
                     displayTime = `(${passTime}通)`;
                     timeSpan.classList.add('is-passing');
                 } else {
-                    // 始発駅の到着時刻・終着駅の発車時刻は非表示
                     const arr = (stop['着'] && !isOrigin) ? stop['着'] + '着' : '';
                     const dep = (stop['発'] && !isTerminal) ? stop['発'] + '発' : '';
                     displayTime = [arr, dep].filter(t => t).join(' / ');
