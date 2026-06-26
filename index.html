@@ -376,7 +376,7 @@
             background: var(--btn-color); color: white; border-color: var(--btn-color);
         }
         
-        /* 【要件】発車到着切替ボタンと通過列車表示は同じ高さの横一列に並める。左に切替、右に通過有無。大きい枠（背景・枠線等）は不要 */
+        /* 【要件】発車到着切替ボタンと通過列車表示は同じ高さの横一列に並べる。左に切替、右に通過有無。大きい枠（背景・枠線等）は不要 */
         .control-row-horizontal {
             display: flex;
             justify-content: space-between;
@@ -592,14 +592,14 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // ★ここに作成した「GASのウェブアプリURL」を貼り付けてください
-        const GAS_API_URL = ''; 
+        // ★ここに作成した「GASのウェブアプリURL」を貼り付けました
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyI6p2XW3Y_T6x6XJ_sL_7K_9p8T3f2l7f2n_T_L_5K/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
         const ROW_HALF_HEIGHT = 42; 
         
-        // 【要件】画面左の駅名スペースを確保しつつ、右側の表示が狭くなりすぎない絶妙な配置（幅の65%に設定）
+        // 【要件】画面左의駅名スペースを確保しつつ、右側の表示が狭くなりすぎない絶妙な配置（幅の65%に設定）
         function getLineX() {
             const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
             return screenWidth * 0.65;
@@ -1329,35 +1329,6 @@
             } catch(e) {
                 console.error("レイアウトファイルの読み込みに失敗しました:", e.message);
             }
-        }
-
-        function timeToSeconds(timeStr) {
-            if (!timeStr) return null;
-            const clean = timeStr.replace(':', '').trim();
-            if (clean.length < 3) return null;
-
-            const h = parseInt(clean.substring(0, clean.length - 2), 10);
-            const m = parseInt(clean.substring(clean.length - 2), 10);
-            
-            let now = new Date();
-            if (now.getHours() < 4) {
-                now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            }
-
-            let targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
-            // 【要件】深夜の列車が時間のズレにより判定対象から外れてしまう現象を防止
-            if (now.getHours() >= 4 && h < 4) {
-                targetDate.setDate(targetDate.getDate() + 1);
-            }
-            return targetDate.getTime() / 1000;
-        }
-
-        function getDisplayTrainNo(mergedTrain, currentStationName) {
-            if (!currentStationName) {
-                return mergedTrain.components[0] ? mergedTrain.components[0].trainNo : "??";
-            }
-            let match = mergedTrain.components.find(c => c.stops[currentStationName] && (c.stops[currentStationName]['着'] || c.stops[currentStationName]['発']));
-            return match ? match.trainNo : (mergedTrain.components[0] ? mergedTrain.components[0].trainNo : "??");
         }
 
         function updateTrainPositions() {
