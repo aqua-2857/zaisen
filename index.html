@@ -588,8 +588,13 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // 新しいウェブアプリURLを完全に直結
+        // 更新いただいた新しいウェブアプリURLを完全に直結
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwv4CQf6F1DVo_p36gSf8ykLpXwNAawfd6wJJ4OXTGtyzv7Io1bn1wL23s3GqpEi25hKA/exec'; 
+
+        // 自動リロード機能用の管理変数
+        const RELOAD_INTERVAL_MS = 30000; // 30秒ごとに自動同期
+        let autoReloadTimerId = null;
+        let lastFormationsHash = ""; // データの変更検知用ハッシュ
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
@@ -690,6 +695,7 @@
             // loadFormationsは非同期で裏で走らせ、完了後に列車位置を再計算。
             // これにより外部GASサーバからのレスポンスを待つことなく、位置情報や列車位置の初期描画が即座に実行されます。
             loadFormations().then(() => {
+                lastFormationsHash = JSON.stringify(globalFormations);
                 if (document.getElementById('zaisen-screen').style.display === 'block') {
                     updateTrainPositions();
                 }
@@ -776,12 +782,19 @@
                 // 安全なJSONP通信経由で取得を行う (5秒タイムアウト)
                 const rawData = await fetchJSONP(GAS_API_URL, 5000);
                 
-                // タイムゾーンによる時間のズレ問題を解消するため、GAS側で4:00基準フィルタがかかって
-                // 正常に返ってきたデータを100%そのまま格納。
+                // 翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット
+                let now = new Date();
+                let opStart = new Date(now.getTime());
+                if (now.getHours() < 4) {
+                    opStart.setDate(now.getDate() - 1);
+                }
+                opStart.setHours(4, 0, 0, 0);
+                const opStartMs = opStart.getTime();
+
                 globalFormations = {};
                 Object.keys(rawData).forEach(unyoNo => {
                     const post = rawData[unyoNo];
-                    if (post) {
+                    if (post && post.timestamp >= opStartMs) {
                         globalFormations[unyoNo] = post;
                     }
                 });
@@ -923,6 +936,10 @@
 
             await loadTimetables();
             await renderRoute();
+            
+            // 位置情報画面に入ったタイミングでインテリジェント自動リロードタイマーを活性化
+            startAutoReload();
+
             if (anchorStationId) {
                 setTimeout(() => {
                     scrollToStation(anchorStationId);
@@ -942,7 +959,11 @@
             document.getElementById('header-title').innerText = "ホーム";
             document.getElementById('home-screen').style.display = 'flex';
             document.getElementById('zaisen-screen').style.display = 'none';
+            document.getElementById('back-button').style.none = 'none';
             document.getElementById('back-button').style.display = 'none';
+            
+            // ホーム画面に戻ったらバックグラウンド通信負荷を抑えるためにタイマーを休止
+            stopAutoReload();
         }
 
         async function checkIsHolidayAPI(targetDate) {
@@ -1999,14 +2020,10 @@
                     timestamp: Date.now()
                 };
                 
-                updateTrainPositions();
+                // 自身の変更を即座にハッシュ反映して画面を瞬時に再同期
+                lastFormationsHash = ""; 
+                syncLatestFormations();
                 closeFormationModal();
-                
-                // 1秒後にバックグラウンドで最新データをロード・再同期して整合性を取ります
-                setTimeout(async () => {
-                    await loadFormations();
-                    updateTrainPositions();
-                }, 1000);
 
             } catch (e) {
                 console.error("[編成投稿] エラー:", e);
@@ -2018,7 +2035,8 @@
                     isSubstitute: isSub,
                     timestamp: Date.now()
                 };
-                updateTrainPositions();
+                lastFormationsHash = ""; 
+                syncLatestFormations();
                 closeFormationModal();
             } finally {
                 if (loader) { loader.style.display = 'none'; }
@@ -2039,22 +2057,88 @@
                 
                 // 送信完了されたと仮定して、ローカル上の投稿状態を即時リセット
                 delete globalFormations[unyoNo];
-                updateTrainPositions();
-                closeFormationModal();
                 
-                // バックグラウンドで最新情報を再読み込み
-                setTimeout(async () => {
-                    await loadFormations();
-                    updateTrainPositions();
-                }, 1000);
+                lastFormationsHash = ""; 
+                syncLatestFormations();
+                closeFormationModal();
 
             } catch (e) {
                 console.error("[編成取消] エラー:", e);
                 delete globalFormations[unyoNo];
-                updateTrainPositions();
+                lastFormationsHash = ""; 
+                syncLatestFormations();
                 closeFormationModal();
             } finally {
                 if (loader) { loader.style.display = 'none'; }
+            }
+        }
+
+        // --- 強化版：インテリジェント自動リロード・同期システム ---
+
+        /**
+         * サーバーから最新の編成投稿データを取得し、
+         * 変化があった場合のみ画面を再描画する
+         */
+        async function syncLatestFormations() {
+            // 1. 位置情報画面が表示されていない時は、サーバーへの無駄なアクセスとバッテリー消費を防ぐために処理をスキップ
+            const zaisenScreen = document.getElementById('zaisen-screen');
+            if (!zaisenScreen || zaisenScreen.style.display !== 'block') {
+                return;
+            }
+
+            // 2. ユーザーが編成投稿モーダルを開いて操作している間は、入力フォームが勝手に初期化されるのを防ぐため同期を一時スキップ
+            const formationModal = document.getElementById('formation-modal');
+            if (formationModal && formationModal.style.display === 'flex') {
+                console.log("[自動リロード] 投稿操作中のため、今回の自動同期をスキップします。");
+                return;
+            }
+
+            try {
+                console.log("[自動リロード] 運用状況のバックグラウンド更新中...");
+                
+                // 最新データをロード
+                await loadFormations();
+                
+                // 3. データに変化があったかチェック（変更時のみ描画処理を走らせて「ちらつき」を防止）
+                const currentHash = JSON.stringify(globalFormations);
+                if (currentHash !== lastFormationsHash) {
+                    console.log("[自動リロード] 運用の変更を検出しました。表示を更新します。");
+                    lastFormationsHash = currentHash;
+                    
+                    // 列車アイコンや文字色などを瞬時に再マッピング
+                    updateTrainPositions();
+
+                    // もし駅の時刻表モーダルが開いていれば、その中の時刻や列車番号の着色・代走マークも追従して更新
+                    const timetableModal = document.getElementById('timetable-modal');
+                    if (timetableModal && timetableModal.style.display === 'flex') {
+                        renderModalTimetable();
+                    }
+                }
+            } catch (error) {
+                console.error("[自動リロード] データの同期に失敗しました:", error);
+            }
+        }
+
+        /**
+         * 自動更新タイマーの開始
+         */
+        function startAutoReload() {
+            if (autoReloadTimerId) {
+                clearInterval(autoReloadTimerId);
+            }
+            // タイマーの初回セット
+            autoReloadTimerId = setInterval(syncLatestFormations, RELOAD_INTERVAL_MS);
+            console.log(`[自動リロード] ${RELOAD_INTERVAL_MS / 1000}秒間隔での監視を開始しました。`);
+        }
+
+        /**
+         * 自動更新タイマーの停止（ホーム画面に戻ったときなどにリソースを節約するため）
+         */
+        function stopAutoReload() {
+            if (autoReloadTimerId) {
+                clearInterval(autoReloadTimerId);
+                autoReloadTimerId = null;
+                console.log("[自動リロード] 監視をサスペンドしました。");
             }
         }
     </script>
