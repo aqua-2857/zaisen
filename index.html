@@ -421,7 +421,7 @@
         .min-cell-time {
             font-size: 0.95rem; font-weight: bold; color: #222; line-height: 1;
         }
-        /* 駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、(04)のようにカッコ書きの薄字（細身 of グレー）で書く。 */
+        /* 駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、(04)のようにカッコ書きの薄字（細身のグレー）で書く。 */
         .min-cell-time.is-passing {
             color: #888; font-weight: normal; text-decoration: none;
         }
@@ -1172,7 +1172,237 @@
             isTimetablesLoaded = true;
         }
 
+        function updateTrainPositions() {
+            if (!currentStations || !currentStations.length) return;
+            const trainLayer = document.getElementById('train-layer');
+            if (!trainLayer) return;
+            trainLayer.innerHTML = '';
+
+            // 現在時刻を午前4:00基準の経過秒数に変換（Daily Seconds）
+            const now = new Date();
+            let h = now.getHours();
+            const m = now.getMinutes();
+            const s = now.getSeconds();
+            
+            if (h < 4) {
+                h += 24;
+            }
+            const nowSec = (h * 3600 + m * 60 + s) - (4 * 3600);
+
+            const lineX = getLineX();
+
+            // エリア重複判定用のスロット管理
+            const trainSlots = {};
+
+            globalTrains.forEach(train => {
+                train.components.forEach(comp => {
+                    const dir = comp.dir;
+                    let orderedRoute = [];
+                    if (dir === 'out') {
+                        for (let i = 0; i < currentStations.length; i++) orderedRoute.push({ idx: i, st: currentStations[i] });
+                    } else {
+                        for (let i = currentStations.length - 1; i >= 0; i--) orderedRoute.push({ idx: i, st: currentStations[i] });
+                    }
+
+                    let points = [];
+                    orderedRoute.forEach(item => {
+                        const stName = stationsMap[item.st['駅ID']];
+                        if (!stName) return;
+                        
+                        const stop = comp.stops[stName]; 
+                        if (!stop) return;
+
+                        let arr = timeToSeconds(stop['着']);
+                        let dep = timeToSeconds(stop['発']);
+                        if (arr === null && dep !== null) arr = dep;
+                        if (dep === null && arr !== null) dep = arr;
+
+                        if (arr !== null || dep !== null) {
+                            points.push({
+                                idx: item.idx,
+                                stName: stName,
+                                arrSec: arr,
+                                depSec: dep,
+                                y: item.idx * BLOCK_HEIGHT + ROW_HALF_HEIGHT
+                            });
+                        }
+                    });
+
+                    for (let k = 0; k < points.length; k++) {
+                        const current = points[k];
+
+                        if (nowSec >= current.arrSec && nowSec < current.depSec) {
+                            const key = `station_${current.stName}_${dir}`;
+                            if (!trainSlots[key]) trainSlots[key] = [];
+                            trainSlots[key].push({
+                                train: train,
+                                comp: comp,
+                                yPos: current.y,
+                                dir: dir,
+                                stName: current.stName,
+                                sortTime: current.depSec 
+                            });
+                            return; 
+                        }
+
+                        if (k < points.length - 1) {
+                            const next = points[k + 1];
+                            if (nowSec >= current.depSec && nowSec < next.arrSec) {
+                                const midY = (current.y + next.y) / 2;
+                                const key = `between_${current.stName}_${next.stName}_${dir}`;
+                                if (!trainSlots[key]) trainSlots[key] = [];
+                                trainSlots[key].push({
+                                    train: train,
+                                    comp: comp,
+                                    yPos: midY,
+                                    dir: dir,
+                                    stName: current.stName,
+                                    sortTime: next.arrSec 
+                                });
+                                return; 
+                            }
+                        }
+                    }
+                });
+            });
+
+            Object.keys(trainSlots).forEach(key => {
+                const list = trainSlots[key];
+                list.sort((a, b) => a.sortTime - b.sortTime);
+
+                list.forEach((item, index) => {
+                    renderTrainIcon(item.train, item.comp, item.yPos, item.dir, lineX, item.stName, index);
+                });
+            });
+        }
+
+        function renderTrainIcon(train, comp, yPos, dir, lineX, stName, index = 0) {
+            const container = document.createElement('div');
+            container.className = 'train-container';
+            
+            const displayNo = comp.trainNo; 
+            
+            const postInfo = getUnyoPostInfo(train.unyoNo);
+            
+            const label = document.createElement('div');
+            label.className = 'train-no-label';
+            label.innerText = displayNo;
+            if (postInfo && postInfo.color) {
+                label.style.color = postInfo.color;
+            }
+
+            const icon = document.createElement('img');
+            icon.className = 'train-icon';
+
+            if (postInfo && postInfo.icon) {
+                icon.src = `icon/${postInfo.icon}.png`;
+            } else {
+                icon.src = `icon/${train.unyoGp}.png`;
+            }
+
+            icon.onerror = function() {
+                this.onerror = null;
+                this.src = 'icon/unknown.png';
+            };
+
+            container.appendChild(label);
+            container.appendChild(icon);
+
+            if (postInfo && postInfo.name) {
+                const formLabel = document.createElement('div');
+                formLabel.style.cssText = `
+                    font-size: 9px;
+                    font-weight: bold;
+                    background-color: rgba(255, 255, 255, 0.85);
+                    padding: 1px 3px;
+                    border-radius: 3px;
+                    margin-top: 2px;
+                    white-space: nowrap;
+                    line-height: 1.1;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    position: relative;
+                `;
+                formLabel.innerText = postInfo.name;
+                
+                if (postInfo.isSubstitute) {
+                    const ast = document.createElement('span');
+                    ast.style.cssText = `
+                        font-size: 8px;
+                        font-weight: bold;
+                        color: red;
+                        vertical-align: super;
+                        position: absolute;
+                        top: -1px;
+                        right: -4px;
+                    `;
+                    ast.innerText = '*';
+                    formLabel.appendChild(ast);
+                    formLabel.style.paddingRight = '6px';
+                }
+                
+                container.appendChild(formLabel);
+            }
+            
+            container.onclick = (e) => {
+                e.stopPropagation();
+                openTrainModal(train, displayNo);
+            };
+
+            container.style.top = `${yPos - 38}px`;
+
+            const offset = 30 + (index * 35);
+            if (dir === 'in') {
+                container.style.left = `${lineX - offset - 30}px`; 
+            } else {
+                container.style.left = `${lineX + offset - 30}px`; 
+            }
+            
+            document.getElementById('train-layer').appendChild(container);
+        }
+
         // --- 駅時刻表ポップアップ制御ロジック群 ---
+        function openTimetableModal(stationId, stationName) {
+            currentModalStationId = stationId;
+            currentModalStationName = stationName;
+            
+            document.getElementById('modal-station-name').innerText = stationName;
+            
+            if (currentStations.length > 0) {
+                let topStId = currentStations[0]['駅ID'];
+                let botStId = currentStations[currentStations.length - 1]['駅ID'];
+                let topName = stationsMap[topStId] || topStId;
+                let botName = stationsMap[botStId] || botStId;
+                
+                document.getElementById('modal-txt-up').innerText = `(${topName}方面)`;
+                document.getElementById('modal-txt-down').innerText = `(${botName}方面)`;
+            }
+
+            document.getElementById('timetable-modal').style.display = 'flex';
+            renderModalTimetable();
+        }
+
+        function closeModal() {
+            document.getElementById('timetable-modal').style.display = 'none';
+        }
+
+        function setModalDir(dir) {
+            currentModalDir = dir;
+            document.getElementById('modal-btn-up').classList.toggle('active', dir === 'up');
+            document.getElementById('modal-btn-down').classList.toggle('active', dir === 'down');
+            renderModalTimetable();
+        }
+
+        function toggleModalTimeType() {
+            if (currentModalTimeType === 'dep') {
+                currentModalTimeType = 'arr';
+                document.getElementById('modal-btn-time-type').innerText = "到着時刻";
+            } else {
+                currentModalTimeType = 'dep';
+                document.getElementById('modal-btn-time-type').innerText = "発車時刻";
+            }
+            renderModalTimetable();
+        }
+
         function renderModalTimetable() {
             const showPassing = document.getElementById('modal-chk-passing').checked;
             const container = document.getElementById('modal-timetable-table');
@@ -1321,6 +1551,48 @@
             if (container.innerHTML === '') {
                 container.innerHTML = '<div style="padding:20px; color:#999; text-align:center;">該当列車なし</div>';
             }
+        }
+
+        // 列車時刻を推定補完
+        function estimatePassingTime(comp, targetStIdx, stIdxMap) {
+            let beforeTime = null, beforeIdx = -1;
+            let afterTime = null, afterIdx = -1;
+            
+            Object.keys(comp.stops).forEach(stName => {
+                let idx = stIdxMap[stName];
+                if (idx === undefined) return;
+                let tStr = comp.stops[stName]['発'] || comp.stops[stName]['着'];
+                if (!tStr) return;
+                let sec = timeToSeconds(tStr);
+                if (sec === null) return;
+                
+                if (idx < targetStIdx) {
+                    if (idx > beforeIdx) { beforeIdx = idx; beforeTime = sec; }
+                } else if (idx > targetStIdx) {
+                    if (afterIdx === -1 || idx < afterIdx) { afterIdx = idx; afterTime = sec; }
+                }
+            });
+            
+            if (beforeTime !== null && afterTime !== null) {
+                let ratio = (targetStIdx - beforeIdx) / (afterIdx - beforeIdx);
+                let estSec = beforeTime + (afterTime - beforeTime) * ratio;
+                
+                let totalMin = Math.round((estSec + 14400) / 60);
+                let h = Math.floor(totalMin / 60) % 24;
+                let m = totalMin % 60;
+                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
+            } else if (beforeTime !== null) {
+                let totalMin = Math.round((beforeTime + 120 + 14400) / 60);
+                let h = Math.floor(totalMin / 60) % 24;
+                let m = totalMin % 60;
+                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
+            } else if (afterTime !== null) {
+                let totalMin = Math.round((afterTime - 120 + 14400) / 60);
+                let h = Math.floor(totalMin / 60) % 24;
+                let m = totalMin % 60;
+                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
+            }
+            return "";
         }
 
         // --- 列車時刻表ポップアップ制御ロジック群 ---
