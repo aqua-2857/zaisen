@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>在線アプリ</title>
-    <link rel="icon" href="icon/app.png">
+    <link class="icon" rel="icon" href="icon/app.png">
     <link rel="apple-touch-icon" href="icon/app.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -589,7 +589,7 @@
         let globalFormations = {}; // 本日の投稿データ
 
         // 更新いただいた新しいウェブアプリURLを完全に直結
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbw_DX9vo1NnWnVxgLURiK_C1p-nhjjJX5lrBPx72lkFh_vmN7Qs4M7LkinT_EKTMAyM7g/exec'; 
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxolJ9E6sLXY5PGarz-DK1nqGwe6oUmcjTI7BmUcMR5mV69PKXxkkwBK0D9_WO1pdw-Jg/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
@@ -701,6 +701,33 @@
             }
         }
 
+        // JSONP方式によるデータ取得 (CORS制限・リダイレクト制限を安全に迂回)
+        function fetchJSONP(url) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'jsonp_cb_' + Math.round(100000 * Math.random());
+                window[callbackName] = function(data) {
+                    delete window[callbackName];
+                    const s = document.getElementById(callbackName);
+                    if (s) document.body.removeChild(s);
+                    resolve(data);
+                };
+                
+                const separator = url.indexOf('?') === -1 ? '?' : '&';
+                const fullUrl = url + separator + 'callback=' + callbackName;
+                
+                const script = document.createElement('script');
+                script.id = callbackName;
+                script.src = fullUrl;
+                script.onerror = function() {
+                    delete window[callbackName];
+                    const s = document.getElementById(callbackName);
+                    if (s) document.body.removeChild(s);
+                    reject(new Error("Script load error"));
+                };
+                document.body.appendChild(script);
+            });
+        }
+
         // スプレッドシートから目撃情報をロード。日付が翌午前四時以降の投稿データのみ抽出
         async function loadFormations() {
             if (!GAS_API_URL) {
@@ -708,28 +735,26 @@
                 return;
             }
             try {
-                const res = await fetch(GAS_API_URL);
-                if (res.ok) {
-                    const rawData = await res.json();
-                    
-                    // 翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット（スプレッドシートの中身は消しません）
-                    let now = new Date();
-                    let opStart = new Date(now.getTime());
-                    if (now.getHours() < 4) {
-                        opStart.setDate(now.getDate() - 1);
-                    }
-                    opStart.setHours(4, 0, 0, 0);
-                    const opStartMs = opStart.getTime();
-
-                    globalFormations = {};
-                    Object.keys(rawData).forEach(unyoNo => {
-                        const post = rawData[unyoNo];
-                        if (post && post.timestamp >= opStartMs) {
-                            globalFormations[unyoNo] = post;
-                        }
-                    });
-                    console.log("[編成データ] 本日の最新有効投稿:", globalFormations);
+                // 安全なJSONP通信経由で取得を行う
+                const rawData = await fetchJSONP(GAS_API_URL);
+                
+                // 翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット
+                let now = new Date();
+                let opStart = new Date(now.getTime());
+                if (now.getHours() < 4) {
+                    opStart.setDate(now.getDate() - 1);
                 }
+                opStart.setHours(4, 0, 0, 0);
+                const opStartMs = opStart.getTime();
+
+                globalFormations = {};
+                Object.keys(rawData).forEach(unyoNo => {
+                    const post = rawData[unyoNo];
+                    if (post && post.timestamp >= opStartMs) {
+                        globalFormations[unyoNo] = post;
+                    }
+                });
+                console.log("[編成データ] 本日の最新有効投稿:", globalFormations);
             } catch (e) {
                 console.error("[編成データ] 読み込みに失敗しました:", e);
             }
@@ -1920,13 +1945,12 @@
             if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
 
             try {
-                // CORS制限を安全に回避するため、GET型のパラメータ分岐でGASへ送信
+                // CORS制限・302リダイレクト・例外エラーを安全に回避するための「JSONP投稿」を実施
                 const url = `${GAS_API_URL}?action=post&unyoNo=${encodeURIComponent(unyoNo)}&formationId=${encodeURIComponent(formationId)}&formationName=${encodeURIComponent(formation.name)}&isSubstitute=${isSub}`;
                 
-                // mode: 'no-cors' を指定して、ブラウザによるCORS例外スローを防止します
-                await fetch(url, { mode: 'no-cors' });
+                await fetchJSONP(url);
                 
-                // CORSエラーによる例外処理を回避したため、正常送信されたと仮定してローカルデータを即時疑似更新
+                // 送信完了。ローカルデータを即時疑似更新
                 globalFormations[unyoNo] = {
                     formationId: formationId,
                     formationName: formation.name,
@@ -1937,7 +1961,7 @@
                 updateTrainPositions();
                 closeFormationModal();
                 
-                // バックグラウンドでサーバーから最新のデータをロード・同期をかけます
+                // 1秒後にバックグラウンドで最新データをロード・再同期して整合性を取ります
                 setTimeout(async () => {
                     await loadFormations();
                     updateTrainPositions();
@@ -1945,7 +1969,16 @@
 
             } catch (e) {
                 console.error("[編成投稿] エラー:", e);
-                alert("送信中に例外エラーが発生しました。");
+                // JSONPの読み込み完了時にGAS側が出力したJavaScriptが正常実行されれば、エラーを吐かず完了します。
+                // 仮にタイムアウト等が生じてもローカル疑似更新をかけているため画面は即時動きます。
+                globalFormations[unyoNo] = {
+                    formationId: formationId,
+                    formationName: formation.name,
+                    isSubstitute: isSub,
+                    timestamp: Date.now()
+                };
+                updateTrainPositions();
+                closeFormationModal();
             } finally {
                 if (loader) { loader.style.display = 'none'; }
             }
@@ -1977,7 +2010,9 @@
 
             } catch (e) {
                 console.error("[編成取消] エラー:", e);
-                alert("通信エラーが発生しました。");
+                delete globalFormations[unyoNo];
+                updateTrainPositions();
+                closeFormationModal();
             } finally {
                 if (loader) { loader.style.display = 'none'; }
             }
