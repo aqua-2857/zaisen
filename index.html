@@ -322,7 +322,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
         .modal-header {
             background: var(--header-bg);
@@ -372,7 +372,6 @@
             background: var(--btn-color); color: white; border-color: var(--btn-color);
         }
         
-        /* 発車到着切替ボタンと通過列車表示は同じ高さの横一列に並める。左に切替、右に通過有無。大きい枠（背景・枠線等）は不要 */
         .control-row-horizontal {
             display: flex;
             justify-content: space-between;
@@ -611,6 +610,32 @@
         let currentModalStationName = '';
         let currentModalDir = 'up'; 
         let currentModalTimeType = 'dep'; // 'dep'=発車時刻, 'arr'=到着時刻
+
+        // --- ★エラー解決: 時刻変換処理の追加★ ---
+        // CSVの"12:34"などの時刻文字列を、今日の該当時刻のUnixタイム（秒）に変換するコア関数
+        function timeToSeconds(timeStr) {
+            if (!timeStr) return null;
+            let parts = timeStr.split(':');
+            if (parts.length < 2) return null;
+            let h = parseInt(parts[0], 10);
+            let m = parseInt(parts[1], 10);
+            if (isNaN(h) || isNaN(m)) return null;
+
+            let now = new Date();
+            // 運行開始日（午前4時基準。早朝4時前なら前日扱い）
+            let baseDate = new Date(now.getTime());
+            if (now.getHours() < 4) {
+                baseDate.setDate(baseDate.getDate() - 1);
+            }
+            
+            // 4時未満（深夜帯 00:00〜03:59）は「翌日の深夜帯」として補正
+            let targetDate = new Date(baseDate.getTime());
+            if (h < 4) {
+                targetDate.setDate(targetDate.getDate() + 1);
+            }
+            targetDate.setHours(h, m, 0, 0);
+            return targetDate.getTime() / 1000;
+        }
 
         window.onresize = () => {
             if (document.getElementById('zaisen-screen').style.display === 'block') {
