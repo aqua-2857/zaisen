@@ -322,7 +322,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
         .modal-header {
             background: var(--header-bg);
@@ -588,7 +588,7 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // 更新いただいた新しいウェブアプリURLを完全に直結
+        // 新しいウェブアプリURLを完全に直結
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxolJ9E6sLXY5PGarz-DK1nqGwe6oUmcjTI7BmUcMR5mV69PKXxkkwBK0D9_WO1pdw-Jg/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
@@ -662,11 +662,19 @@
             }
         }
 
+        // ノンブロッキング初期化設計に調整
         async function initApp() {
             await loadMasters();
             await loadFormationsCSV(); // 登録車両データの読み込みと編成IDマスタ化
             await loadInfoAndGenerateButtons();
-            await loadFormations(); // スプレッドシート投稿データの読み込み
+            
+            // loadFormationsは非同期で裏で走らせ、完了後に列車位置を再計算。
+            // これにより外部GASサーバからのレスポンスを待つことなく、位置情報や列車位置の初期描画が即座に実行されます。
+            loadFormations().then(() => {
+                if (document.getElementById('zaisen-screen').style.display === 'block') {
+                    updateTrainPositions();
+                }
+            });
         }
 
         // zaisen - formation_id.csv のロード。各編成に割り当てられた情報をマスタ配列化。
@@ -701,11 +709,21 @@
             }
         }
 
-        // JSONP方式によるデータ取得 (CORS制限・リダイレクト制限を安全に迂回)
-        function fetchJSONP(url) {
+        // JSONP方式によるデータ取得 (CORS制限・302リダイレクト制限を安全かつ完璧に迂回するタイムアウト制限付き設計)
+        function fetchJSONP(url, timeout = 5000) {
             return new Promise((resolve, reject) => {
                 const callbackName = 'jsonp_cb_' + Math.round(100000 * Math.random());
+                
+                // タイムアウト監視
+                const timer = setTimeout(() => {
+                    delete window[callbackName];
+                    const s = document.getElementById(callbackName);
+                    if (s) document.body.removeChild(s);
+                    reject(new Error("GASサーバ応答タイムアウト"));
+                }, timeout);
+
                 window[callbackName] = function(data) {
+                    clearTimeout(timer);
                     delete window[callbackName];
                     const s = document.getElementById(callbackName);
                     if (s) document.body.removeChild(s);
@@ -719,6 +737,7 @@
                 script.id = callbackName;
                 script.src = fullUrl;
                 script.onerror = function() {
+                    clearTimeout(timer);
                     delete window[callbackName];
                     const s = document.getElementById(callbackName);
                     if (s) document.body.removeChild(s);
@@ -735,8 +754,8 @@
                 return;
             }
             try {
-                // 安全なJSONP通信経由で取得を行う
-                const rawData = await fetchJSONP(GAS_API_URL);
+                // 安全なJSONP通信経由で取得を行う (5秒タイムアウト)
+                const rawData = await fetchJSONP(GAS_API_URL, 5000);
                 
                 // 翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット
                 let now = new Date();
@@ -1900,7 +1919,7 @@
                 selectEl.appendChild(opt);
             });
 
-            // 既存 of 投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
+            // 既存の投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
             const currentPost = globalFormations[unyoNo];
             const deleteBtn = document.getElementById('btn-delete-post');
             
@@ -1994,10 +2013,9 @@
             try {
                 const url = `${GAS_API_URL}?action=delete&unyoNo=${encodeURIComponent(unyoNo)}`;
                 
-                // mode: 'no-cors' を指定して、ブラウザによるCORS例外スローを防止します
-                await fetch(url, { mode: 'no-cors' });
+                await fetchJSONP(url);
                 
-                // 送信されたと仮定して、ローカル上の投稿状態を即時リセット
+                // 送信完了されたと仮定して、ローカル上の投稿状態を即時リセット
                 delete globalFormations[unyoNo];
                 updateTrainPositions();
                 closeFormationModal();
