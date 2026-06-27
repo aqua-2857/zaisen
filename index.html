@@ -777,7 +777,7 @@
                 const rawData = await fetchJSONP(GAS_API_URL, 5000);
                 
                 // タイムゾーンによる時間のズレ問題を解消するため、GAS側で4:00基準フィルタがかかって
-                // 正常に返ってきたデータを100%そのまま格納するようにロジックを最適化。
+                // 正常に返ってきたデータを100%そのまま格納。
                 globalFormations = {};
                 Object.keys(rawData).forEach(unyoNo => {
                     const post = rawData[unyoNo];
@@ -1434,7 +1434,6 @@
                     for (let k = 0; k < points.length; k++) {
                         const current = points[k];
 
-                        // 1. 駅停車中判定
                         if (nowSec >= current.arrSec && nowSec < current.depSec) {
                             const key = `station_${current.stName}_${dir}`;
                             if (!trainSlots[key]) trainSlots[key] = [];
@@ -1449,7 +1448,6 @@
                             return; 
                         }
 
-                        // 2. 駅間走行中判定
                         if (k < points.length - 1) {
                             const next = points[k + 1];
                             if (nowSec >= current.depSec && nowSec < next.arrSec) {
@@ -1943,7 +1941,7 @@
                 selectEl.appendChild(opt);
             });
 
-            // 既存の投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
+            // 既存 of 投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
             const currentPost = globalFormations[unyoNo];
             const deleteBtn = document.getElementById('btn-delete-post');
             
