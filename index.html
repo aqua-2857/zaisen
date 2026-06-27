@@ -588,7 +588,7 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // 更新いただいた新しいウェブアプリURLを完全に直結
+        // 新しいウェブアプリURLを完全に直結
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxolJ9E6sLXY5PGarz-DK1nqGwe6oUmcjTI7BmUcMR5mV69PKXxkkwBK0D9_WO1pdw-Jg/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
@@ -618,7 +618,7 @@
             }
         };
 
-        // 0:00からの経過秒数に変換する、完璧な時間の秒数変換関数（【最重要】表示されないバグを完全に修正）
+        // 0:00からの経過秒数に変換する、完璧な時間の秒数変換関数（Daily Seconds）
         function timeToSeconds(timeStr) {
             if (!timeStr) return null;
             const clean = timeStr.replace(':', '').trim();
@@ -776,19 +776,12 @@
                 // 安全なJSONP通信経由で取得を行う (5秒タイムアウト)
                 const rawData = await fetchJSONP(GAS_API_URL, 5000);
                 
-                // 翌午前四時（4:00 AM）を日付変更線のしきい値とし、それより古い投稿をリセット
-                let now = new Date();
-                let opStart = new Date(now.getTime());
-                if (now.getHours() < 4) {
-                    opStart.setDate(now.getDate() - 1);
-                }
-                opStart.setHours(4, 0, 0, 0);
-                const opStartMs = opStart.getTime();
-
+                // タイムゾーンによる時間のズレ問題を解消するため、GAS側で4:00基準フィルタがかかって
+                // 正常に返ってきたデータを100%そのまま格納するようにロジックを最適化。
                 globalFormations = {};
                 Object.keys(rawData).forEach(unyoNo => {
                     const post = rawData[unyoNo];
-                    if (post && post.timestamp >= opStartMs) {
+                    if (post) {
                         globalFormations[unyoNo] = post;
                     }
                 });
