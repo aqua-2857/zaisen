@@ -588,7 +588,7 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // 新しいウェブアプリURLを完全に直結
+        // ご提示いただいた新しいGASのウェブアプリURLを完全に直結
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx879wW6y-0frcvdScxH0oDauRsHh7SjwGa5QQcKJkgSoj4A_KfnWMmzvbobSkMRt-UjQ/exec'; 
 
         // 自動リロード機能用の管理変数
@@ -955,7 +955,7 @@
             document.getElementById('zaisen-screen').style.display = 'none';
             document.getElementById('back-button').style.display = 'none';
             
-            // ホーム画面に戻ったらバックグラウンド通信負荷を抑えるためにタイマーを休止
+            // ホーム画面に戻たらバックグラウンド通信負荷を抑えるためにタイマーを休止
             stopAutoReload();
         }
 
@@ -1738,7 +1738,7 @@
                 selectEl.appendChild(opt);
             });
 
-            // 既存の投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
+            // 既存 of 投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
             const currentPost = globalFormations[unyoNo];
             const deleteBtn = document.getElementById('btn-delete-post');
             
