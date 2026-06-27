@@ -322,7 +322,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
         .modal-header {
             background: var(--header-bg);
@@ -372,6 +372,7 @@
             background: var(--btn-color); color: white; border-color: var(--btn-color);
         }
         
+        /* 発車到着切替ボタンと通過列車表示は同じ高さの横一列に並める。左に切替、右に通過有無。大きい枠（背景・枠線等）は不要 */
         .control-row-horizontal {
             display: flex;
             justify-content: space-between;
@@ -587,7 +588,7 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // 新しいウェブアプリURLを完全に直結
+        // 更新いただいた新しいウェブアプリURLを完全に直結
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxolJ9E6sLXY5PGarz-DK1nqGwe6oUmcjTI7BmUcMR5mV69PKXxkkwBK0D9_WO1pdw-Jg/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
@@ -611,37 +612,30 @@
         let currentModalDir = 'up'; 
         let currentModalTimeType = 'dep'; // 'dep'=発車時刻, 'arr'=到着時刻
 
-        // --- ★エラー解決: 時刻変換処理の追加★ ---
-        // CSVの"12:34"などの時刻文字列を、今日の該当時刻のUnixタイム（秒）に変換するコア関数
-        function timeToSeconds(timeStr) {
-            if (!timeStr) return null;
-            let parts = timeStr.split(':');
-            if (parts.length < 2) return null;
-            let h = parseInt(parts[0], 10);
-            let m = parseInt(parts[1], 10);
-            if (isNaN(h) || isNaN(m)) return null;
-
-            let now = new Date();
-            // 運行開始日（午前4時基準。早朝4時前なら前日扱い）
-            let baseDate = new Date(now.getTime());
-            if (now.getHours() < 4) {
-                baseDate.setDate(baseDate.getDate() - 1);
-            }
-            
-            // 4時未満（深夜帯 00:00〜03:59）は「翌日の深夜帯」として補正
-            let targetDate = new Date(baseDate.getTime());
-            if (h < 4) {
-                targetDate.setDate(targetDate.getDate() + 1);
-            }
-            targetDate.setHours(h, m, 0, 0);
-            return targetDate.getTime() / 1000;
-        }
-
         window.onresize = () => {
             if (document.getElementById('zaisen-screen').style.display === 'block') {
                 renderRoute();
             }
         };
+
+        // 0:00からの経過秒数に変換する、完璧な時間の秒数変換関数（【最重要】表示されないバグを完全に修正）
+        function timeToSeconds(timeStr) {
+            if (!timeStr) return null;
+            const clean = timeStr.replace(':', '').trim();
+            if (clean.length < 3) return null;
+
+            let h = parseInt(clean.substring(0, clean.length - 2), 10);
+            const m = parseInt(clean.substring(clean.length - 2), 10);
+            
+            // 0:00～3:59 (h < 4) の深夜表記の列車は、24時間プラス（24:00～27:59）として計算
+            if (h < 4) {
+                h += 24;
+            }
+            
+            // 4:00 AM を「0秒基準」として、一日のタイムライン経過秒数を算出
+            const baseSeconds = (h * 3600 + m * 60) - (4 * 3600);
+            return baseSeconds;
+        }
 
         function syncUpdateLoop() {
             updateTrainPositions();
@@ -1388,23 +1382,26 @@
             }
         }
 
-        function getDisplayTrainNo(mergedTrain, currentStationName) {
-            if (!currentStationName) {
-                return mergedTrain.components[0] ? mergedTrain.components[0].trainNo : "??";
-            }
-            let match = mergedTrain.components.find(c => c.stops[currentStationName] && (c.stops[currentStationName]['着'] || c.stops[currentStationName]['発']));
-            return match ? match.trainNo : (mergedTrain.components[0] ? mergedTrain.components[0].trainNo : "??");
-        }
-
         function updateTrainPositions() {
             if (!currentStations || !currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
             if (!trainLayer) return;
             trainLayer.innerHTML = '';
 
-            const nowSec = new Date().getTime() / 1000;
+            // 現在時刻を午前4:00基準の経過秒数に変換（Daily Seconds）
+            const now = new Date();
+            let h = now.getHours();
+            const m = now.getMinutes();
+            const s = now.getSeconds();
+            
+            if (h < 4) {
+                h += 24;
+            }
+            const nowSec = (h * 3600 + m * 60 + s) - (4 * 3600);
+
             const lineX = getLineX();
 
+            // エリア重複判定用のスロット管理
             const trainSlots = {};
 
             globalTrains.forEach(train => {
@@ -1444,6 +1441,7 @@
                     for (let k = 0; k < points.length; k++) {
                         const current = points[k];
 
+                        // 1. 駅停車中判定
                         if (nowSec >= current.arrSec && nowSec < current.depSec) {
                             const key = `station_${current.stName}_${dir}`;
                             if (!trainSlots[key]) trainSlots[key] = [];
@@ -1458,6 +1456,7 @@
                             return; 
                         }
 
+                        // 2. 駅間走行中判定
                         if (k < points.length - 1) {
                             const next = points[k + 1];
                             if (nowSec >= current.depSec && nowSec < next.arrSec) {
@@ -1789,14 +1788,21 @@
             if (beforeTime !== null && afterTime !== null) {
                 let ratio = (targetStIdx - beforeIdx) / (afterIdx - beforeIdx);
                 let estSec = beforeTime + (afterTime - beforeTime) * ratio;
-                let d = new Date(estSec * 1000);
-                return String(d.getHours()).padStart(2,'0') + ":" + String(d.getMinutes()).padStart(2,'0');
+                
+                let totalMin = Math.round((estSec + 14400) / 60);
+                let h = Math.floor(totalMin / 60) % 24;
+                let m = totalMin % 60;
+                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
             } else if (beforeTime !== null) {
-                let d = new Date((beforeTime + 120) * 1000); 
-                return String(d.getHours()).padStart(2,'0') + ":" + String(d.getMinutes()).padStart(2,'0');
+                let totalMin = Math.round((beforeTime + 120 + 14400) / 60);
+                let h = Math.floor(totalMin / 60) % 24;
+                let m = totalMin % 60;
+                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
             } else if (afterTime !== null) {
-                let d = new Date((afterTime - 120) * 1000); 
-                return String(d.getHours()).padStart(2,'0') + ":" + String(d.getMinutes()).padStart(2,'0');
+                let totalMin = Math.round((afterTime - 120 + 14400) / 60);
+                let h = Math.floor(totalMin / 60) % 24;
+                let m = totalMin % 60;
+                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
             }
             return "";
         }
