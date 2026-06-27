@@ -588,7 +588,7 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // ご提示いただいた新しいGASのウェブアプリURLを完全に直結
+        // 新しいウェブアプリURLを完全に直結
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx879wW6y-0frcvdScxH0oDauRsHh7SjwGa5QQcKJkgSoj4A_KfnWMmzvbobSkMRt-UjQ/exec'; 
 
         // 自動リロード機能用の管理変数
@@ -955,7 +955,7 @@
             document.getElementById('zaisen-screen').style.display = 'none';
             document.getElementById('back-button').style.display = 'none';
             
-            // ホーム画面に戻たらバックグラウンド通信負荷を抑えるためにタイマーを休止
+            // ホーム画面に戻ったらバックグラウンド通信負荷を抑えるためにタイマーを休止
             stopAutoReload();
         }
 
@@ -1172,6 +1172,50 @@
             isTimetablesLoaded = true;
         }
 
+        // 時刻表のパース
+        function parseTimetableCSV(text, dir) {
+            const cleanText = text.replace(/^\uFEFF/, '').replace(/\r/g, '');
+            const lines = cleanText.split('\n').filter(l => l.trim() !== '');
+            if (lines.length < 6) return [];
+
+            const trainNumbers = lines[0].split(',').slice(2);
+            const trains = trainNumbers.map(num => ({ trainNo: num.trim(), stops: {}, dir: dir }));
+            for (let i = 5; i < lines.length; i++) {
+                const cols = lines[i].split(',').map(c => c.trim());
+                if (cols.length < 3) continue;
+
+                const stationName = cols[0];
+                const type = cols[1];
+                if (!stationName || (type !== '着' && type !== '発')) continue;
+                for (let j = 2; j < cols.length; j++) {
+                    let timeStr = cols[j];
+                    if (timeStr && trains[j - 2]) {
+                        if (!trains[j - 2].stops[stationName]) {
+                            trains[j - 2].stops[stationName] = {};
+                        }
+                        
+                        // 通過列車の時刻表はcsvに［レ1234］とあるため、先頭に「レ」があるかで通過列車を判断する。
+                        let isPassing = false;
+                        if (timeStr.startsWith('レ')) {
+                            isPassing = true;
+                            timeStr = timeStr.substring(1); // 「レ」を取り除く
+                        }
+
+                        // 時刻にコロンがない場合の補完
+                        if (timeStr.length === 4 && !timeStr.includes(':')) {
+                            timeStr = timeStr.substring(0, 2) + ':' + timeStr.substring(2);
+                        }
+
+                        trains[j - 2].stops[stationName][type] = timeStr;
+                        if (isPassing) {
+                            trains[j - 2].stops[stationName]['isPassing'] = true;
+                        }
+                    }
+                }
+            }
+            return trains.filter(t => t.trainNo !== '');
+        }
+
         function updateTrainPositions() {
             if (!currentStations || !currentStations.length) return;
             const trainLayer = document.getElementById('train-layer');
@@ -1231,6 +1275,7 @@
                     for (let k = 0; k < points.length; k++) {
                         const current = points[k];
 
+                        // 1. 駅停車中判定
                         if (nowSec >= current.arrSec && nowSec < current.depSec) {
                             const key = `station_${current.stName}_${dir}`;
                             if (!trainSlots[key]) trainSlots[key] = [];
@@ -1245,6 +1290,7 @@
                             return; 
                         }
 
+                        // 2. 駅間走行中判定
                         if (k < points.length - 1) {
                             const next = points[k + 1];
                             if (nowSec >= current.depSec && nowSec < next.arrSec) {
@@ -1358,49 +1404,6 @@
             }
             
             document.getElementById('train-layer').appendChild(container);
-        }
-
-        // --- 駅時刻表ポップアップ制御ロジック群 ---
-        function openTimetableModal(stationId, stationName) {
-            currentModalStationId = stationId;
-            currentModalStationName = stationName;
-            
-            document.getElementById('modal-station-name').innerText = stationName;
-            
-            if (currentStations.length > 0) {
-                let topStId = currentStations[0]['駅ID'];
-                let botStId = currentStations[currentStations.length - 1]['駅ID'];
-                let topName = stationsMap[topStId] || topStId;
-                let botName = stationsMap[botStId] || botStId;
-                
-                document.getElementById('modal-txt-up').innerText = `(${topName}方面)`;
-                document.getElementById('modal-txt-down').innerText = `(${botName}方面)`;
-            }
-
-            document.getElementById('timetable-modal').style.display = 'flex';
-            renderModalTimetable();
-        }
-
-        function closeModal() {
-            document.getElementById('timetable-modal').style.display = 'none';
-        }
-
-        function setModalDir(dir) {
-            currentModalDir = dir;
-            document.getElementById('modal-btn-up').classList.toggle('active', dir === 'up');
-            document.getElementById('modal-btn-down').classList.toggle('active', dir === 'down');
-            renderModalTimetable();
-        }
-
-        function toggleModalTimeType() {
-            if (currentModalTimeType === 'dep') {
-                currentModalTimeType = 'arr';
-                document.getElementById('modal-btn-time-type').innerText = "到着時刻";
-            } else {
-                currentModalTimeType = 'dep';
-                document.getElementById('modal-btn-time-type').innerText = "発車時刻";
-            }
-            renderModalTimetable();
         }
 
         function renderModalTimetable() {
@@ -1553,209 +1556,6 @@
             }
         }
 
-        // 列車時刻を推定補完
-        function estimatePassingTime(comp, targetStIdx, stIdxMap) {
-            let beforeTime = null, beforeIdx = -1;
-            let afterTime = null, afterIdx = -1;
-            
-            Object.keys(comp.stops).forEach(stName => {
-                let idx = stIdxMap[stName];
-                if (idx === undefined) return;
-                let tStr = comp.stops[stName]['発'] || comp.stops[stName]['着'];
-                if (!tStr) return;
-                let sec = timeToSeconds(tStr);
-                if (sec === null) return;
-                
-                if (idx < targetStIdx) {
-                    if (idx > beforeIdx) { beforeIdx = idx; beforeTime = sec; }
-                } else if (idx > targetStIdx) {
-                    if (afterIdx === -1 || idx < afterIdx) { afterIdx = idx; afterTime = sec; }
-                }
-            });
-            
-            if (beforeTime !== null && afterTime !== null) {
-                let ratio = (targetStIdx - beforeIdx) / (afterIdx - beforeIdx);
-                let estSec = beforeTime + (afterTime - beforeTime) * ratio;
-                
-                let totalMin = Math.round((estSec + 14400) / 60);
-                let h = Math.floor(totalMin / 60) % 24;
-                let m = totalMin % 60;
-                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
-            } else if (beforeTime !== null) {
-                let totalMin = Math.round((beforeTime + 120 + 14400) / 60);
-                let h = Math.floor(totalMin / 60) % 24;
-                let m = totalMin % 60;
-                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
-            } else if (afterTime !== null) {
-                let totalMin = Math.round((afterTime - 120 + 14400) / 60);
-                let h = Math.floor(totalMin / 60) % 24;
-                let m = totalMin % 60;
-                return String(h).padStart(2,'0') + ":" + String(m).padStart(2,'0');
-            }
-            return "";
-        }
-
-        // --- 列車時刻表ポップアップ制御ロジック群 ---
-        function openTrainModal(train, trainNo) {
-            // ヘッダータイトルは列車番号のみを左揃えで大きく表示
-            document.getElementById('train-modal-no').innerText = trainNo;
-            
-            const postInfo = getUnyoPostInfo(train.unyoNo);
-            const headerEl = document.querySelector('#train-modal .modal-header');
-            
-            if (postInfo && postInfo.color) {
-                headerEl.style.backgroundColor = postInfo.color;
-            } else {
-                headerEl.style.backgroundColor = 'var(--header-bg)';
-            }
-
-            // 運用番号は運用番号のみ表示
-            document.getElementById('train-modal-unyo-text').innerText = `運用番号: ${train.unyoNo || 'なし'}`;
-
-            // 列車時刻表では運用番号の横に編成名を表示（代走時は後ろにアスタリスク）
-            const formTextEl = document.getElementById('train-modal-formation-text');
-            if (postInfo && postInfo.name) {
-                formTextEl.innerText = postInfo.name + (postInfo.isSubstitute ? ' *' : '');
-                if (postInfo.color) {
-                    formTextEl.style.color = postInfo.color;
-                }
-            } else {
-                formTextEl.innerText = '';
-            }
-
-            // 一番右の「運用投稿」ボタンの表示制御
-            const postBtn = document.getElementById('btn-post-from-train-modal');
-            if (train.unyoNo) {
-                postBtn.style.display = 'block';
-                postBtn.onclick = () => {
-                    closeTrainModal();
-                    openFormationModal(train.unyoNo, trainNo, train.unyoGp);
-                };
-            } else {
-                postBtn.style.display = 'none';
-            }
-
-            const listContainer = document.getElementById('train-timetable-list');
-            listContainer.innerHTML = '';
-
-            let stIdxMap = {};
-            currentStations.forEach((s, idx) => {
-                let name = stationsMap[s['駅ID']];
-                if (name) stIdxMap[name] = idx;
-            });
-
-            // 上り列車の時刻表が正しい順序（下から上、終点から起点に向かう順）になるように並び順を制御する
-            const comp = train.components.find(c => c.trainNo === trainNo);
-            const isUp = comp && comp.dir === 'in';
-
-            let stationsToRender = [...currentStations];
-            if (isUp) {
-                stationsToRender.reverse(); // 上りの場合は逆順に配置
-            }
-
-            stationsToRender.forEach(stationRow => {
-                const sId = stationRow['駅ID'];
-                const sName = stationsMap[sId] || sId;
-                
-                const stop = train.stops[sName];
-                if (!stop) return; // この列車が通らない駅は表示スキップ
-
-                const targetStIdx = stIdxMap[sName];
-                let validIdxs = Object.keys(train.stops).map(n => stIdxMap[n]).filter(idx => idx !== undefined);
-                let minIdx = Math.min(...validIdxs);
-                let maxIdx = Math.max(...validIdxs);
-
-                // 上り列車・下り列車それぞれの進行方向に基づき、始発駅と終着駅の判定を正しく行う
-                const isOrigin = isUp ? (targetStIdx === maxIdx) : (targetStIdx === minIdx);
-                const isTerminal = isUp ? (targetStIdx === minIdx) : (targetStIdx === maxIdx);
-
-                const rowDiv = document.createElement('div');
-                rowDiv.className = 'train-timetable-row';
-                
-                rowDiv.onclick = () => {
-                    closeTrainModal();
-                    openTimetableModal(sId, sName);
-                };
-
-                const stationSpan = document.createElement('span');
-                stationSpan.className = 'train-timetable-station';
-                stationSpan.innerText = sName;
-
-                const timeSpan = document.createElement('span');
-                timeSpan.className = 'train-timetable-time';
-
-                const isPassing = stop['isPassing'] || (!stop['着'] && !stop['発']);
-                let displayTime = '';
-                
-                if (isPassing) {
-                    // 列車時刻表の通過時刻にもコロンを入れる (12:34通) の形で表示
-                    let passTime = stop['発'] || stop['着'] || '--:--';
-                    displayTime = `(${passTime}通)`;
-                    timeSpan.classList.add('is-passing');
-                } else {
-                    const arr = (stop['着'] && !isOrigin) ? stop['着'] + '着' : '';
-                    const dep = (stop['発'] && !isTerminal) ? stop['発'] + '発' : '';
-                    displayTime = [arr, dep].filter(t => t).join(' / ');
-                }
-                timeSpan.innerText = displayTime;
-
-                rowDiv.appendChild(stationSpan);
-                rowDiv.appendChild(timeSpan);
-                listContainer.appendChild(rowDiv);
-            });
-
-            if (listContainer.innerHTML === '') {
-                listContainer.innerHTML = '<div style="padding:20px; color:#999; text-align:center;">停車駅データなし</div>';
-            }
-
-            document.getElementById('train-modal').style.display = 'flex';
-        }
-
-        function closeTrainModal() {
-            document.getElementById('train-modal').style.display = 'none';
-        }
-
-        // --- 編成投稿用のモーダル制御ロジック群 ---
-        function openFormationModal(unyoNo, trainNo, unyoGp) {
-            document.getElementById('form-train-no').innerText = trainNo;
-            document.getElementById('form-unyo-no').innerText = unyoNo;
-            
-            const selectEl = document.getElementById('select-formation-id');
-            selectEl.innerHTML = '<option value="">-- 編成を選択 --</option>';
-
-            // 編成に登録された通常運用Gpまたは代走運用Gpに合致する編成のみ選択肢に表示
-            const allowedFormations = formationsList.filter(form => {
-                return form.normalGps.includes(unyoGp) || form.substituteGps.includes(unyoGp);
-            });
-
-            allowedFormations.forEach(form => {
-                // 代走運用の判定 (代走運用Gpには入っているが、通常運用Gpには入っていない)
-                const isSub = form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
-                
-                const opt = document.createElement('option');
-                opt.value = form.id;
-                opt.innerText = `${form.name} ${isSub ? '[代走]' : ''}`;
-                selectEl.appendChild(opt);
-            });
-
-            // 既存 of 投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
-            const currentPost = globalFormations[unyoNo];
-            const deleteBtn = document.getElementById('btn-delete-post');
-            
-            if (currentPost) {
-                selectEl.value = currentPost.formationId;
-                deleteBtn.style.display = 'block';
-            } else {
-                deleteBtn.style.display = 'none';
-            }
-
-            document.getElementById('formation-modal').style.display = 'flex';
-        }
-
-        function closeFormationModal() {
-            document.getElementById('formation-modal').style.display = 'none';
-        }
-
         async function submitFormation() {
             const unyoNo = document.getElementById('form-unyo-no').innerText;
             const selectEl = document.getElementById('select-formation-id');
@@ -1819,7 +1619,6 @@
             }
         }
 
-        // 運用投稿の取り消しアクション処理
         async function deleteFormationPost() {
             const unyoNo = document.getElementById('form-unyo-no').innerText;
 
@@ -1849,20 +1648,12 @@
             }
         }
 
-        // --- 強化版：インテリジェント自動リロード・同期システム ---
-
-        /**
-         * サーバーから最新の編成投稿データを取得し、
-         * 変化があった場合のみ画面を再描画する
-         */
         async function syncLatestFormations() {
-            // 1. 位置情報画面が表示されていない時は、サーバーへの無駄なアクセスとバッテリー消費を防ぐために処理をスキップ
             const zaisenScreen = document.getElementById('zaisen-screen');
             if (!zaisenScreen || zaisenScreen.style.display !== 'block') {
                 return;
             }
 
-            // 2. ユーザーが編成投稿モーダルを開いて操作している間は、入力フォームが勝手に初期化されるのを防ぐため同期を一時スキップ
             const formationModal = document.getElementById('formation-modal');
             if (formationModal && formationModal.style.display === 'flex') {
                 console.log("[自動リロード] 投稿操作中のため、今回の自動同期をスキップします。");
@@ -1872,19 +1663,15 @@
             try {
                 console.log("[自動リロード] 運用状況のバックグラウンド更新中...");
                 
-                // 最新データをロード
                 await loadFormations();
                 
-                // 3. データに変化があったかチェック（変更時のみ描画処理を走らせて「ちらつき」を防止）
                 const currentHash = JSON.stringify(globalFormations);
                 if (currentHash !== lastFormationsHash) {
                     console.log("[自動リロード] 運用の変更を検出しました。表示を更新します。");
                     lastFormationsHash = currentHash;
                     
-                    // 列車アイコンや文字色などを瞬時に再マッピング
                     updateTrainPositions();
 
-                    // もし駅の時刻表モーダルが開いていれば、その中の時刻や列車番号の着色・代走マークも追従して更新
                     const timetableModal = document.getElementById('timetable-modal');
                     if (timetableModal && timetableModal.style.display === 'flex') {
                         renderModalTimetable();
@@ -1895,21 +1682,14 @@
             }
         }
 
-        /**
-         * 自動更新タイマーの開始
-         */
         function startAutoReload() {
             if (autoReloadTimerId) {
                 clearInterval(autoReloadTimerId);
             }
-            // タイマーの初回セット
             autoReloadTimerId = setInterval(syncLatestFormations, RELOAD_INTERVAL_MS);
             console.log(`[自動リロード] ${RELOAD_INTERVAL_MS / 1000}秒間隔での監視を開始しました。`);
         }
 
-        /**
-         * 自動更新タイマーの停止（ホーム画面に戻ったときなどにリソースを節約するため）
-         */
         function stopAutoReload() {
             if (autoReloadTimerId) {
                 clearInterval(autoReloadTimerId);
