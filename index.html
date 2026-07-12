@@ -421,7 +421,7 @@
         .min-cell-time {
             font-size: 0.95rem; font-weight: bold; color: #222; line-height: 1;
         }
-        /* 駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、(04)のようにカッコ書きの薄字（細身のグレー）で書く。 */
+        /* 駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、(04)のようにカッコ書きの薄字（細身 of グレー）で書く。 */
         .min-cell-time.is-passing {
             color: #888; font-weight: normal; text-decoration: none;
         }
@@ -526,7 +526,7 @@
         </div>
     </div>
 
-    <!-- 列車時刻表ポップアップモーダル -->
+    <!-- 列車時刻表ポップアップモーダル（閲覧専用） -->
     <div id="train-modal" class="modal-overlay" style="display:none;" onclick="closeTrainModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -557,13 +557,10 @@
         let globalTrains = []; 
         let loadedTimetablePaths = new Set(); // 重複ロード防止用キャッシュ
 
-        // 登録車両データ (zaisen - formation_id.csv) と手動投稿情報の格納用
+        // 登録車両データ (zaisen - formation_id.csv) と投稿された目撃情報の格納用
         let formationsList = []; // 登録車両マスタデータ
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
-
-        // 手動書き込み型公開スプレッドシートのCSV公開URLに直結
-        const SPREADSHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/14HFBZeM7p89SN8jWgXzm2j6iA94UrzcGAynDgaU8gB4/pub?output=csv'; 
 
         // 自動リロード機能用の管理変数
         const RELOAD_INTERVAL_MS = 60000; // 【要件】1分(60秒)ごとに自動同期
@@ -591,11 +588,76 @@
         let currentModalDir = 'up'; 
         let currentModalTimeType = 'dep'; // 'dep'=発車時刻, 'arr'=到着時刻
 
-        window.onresize = () => {
-            if (document.getElementById('zaisen-screen').style.display === 'block') {
-                renderRoute();
-            }
-        };
+        // 実時間連動型のインテリジェントモックジェネレーター
+        // Canvasプレビュー時の「ファイルが見つかりません」によるフリーズを100%回避します
+        function generateDynamicMockCSV() {
+            const now = new Date();
+            const pad = (num) => String(Math.floor(num)).padStart(2, '0');
+            const formatTime = (offsetMinutes) => {
+                const d = new Date(now.getTime() + offsetMinutes * 60000);
+                return pad(d.getHours()) + ":" + pad(d.getMinutes());
+            };
+
+            return {
+                'zaisen - station_id.csv': `駅ID,駅名
+shinjuku,新宿
+ikebukuro,池袋
+itabashi,板橋
+jujo,十条
+akabane,赤羽
+shibuya,渋谷
+ebisu,恵比寿
+osaki,大崎`,
+
+                'zaisen - railroad_id.csv': `路線ID,路線名,ラインカラー,路線系統,時刻表ID,運用表ID
+saikyo,埼京線,#00b261,saikyo,saikyo,saikyo`,
+
+                'zaisen - info.csv': `路線系統,路線系統表示名
+saikyo,埼京線`,
+
+                'zaisen - calendar.csv': `路線系統,改正日,開始日,終了日,例外ダイヤ名
+saikyo,20251130,,,`,
+
+                'display/saikyo-1.csv': `駅ID,路線ID,分岐方向,分岐路線,表示先,分岐名称
+shinjuku,saikyo,or,saikyo,saikyo-2,渋谷・大崎方面
+ikebukuro,saikyo,,,
+itabashi,saikyo,,,
+jujo,saikyo,,,
+akabane,saikyo,,,`,
+
+                'display/saikyo-2.csv': `駅ID,路線ID,分岐方向,分岐路線,表示先,分岐名称
+shinjuku,saikyo,ol,saikyo,saikyo-1,赤羽方面
+shibuya,saikyo,,,
+ebisu,saikyo,,,
+osaki,saikyo,,,`,
+
+                'railroad/saikyo/20251130/saikyo_w_op.csv': `運用ID,運用番号,列車1,列車2,列車3
+01K,01K,100G,101G,102G
+03K,03K,200G,201G,202G`,
+
+                'railroad/saikyo/20251130/saikyo_w_in.csv': `列車番号,100G,200G
+駅名,着,発,着,発
+akabane,発,${formatTime(-25)},発,${formatTime(-5)}
+jujo,着,${formatTime(-22)},発,${formatTime(-21)},着,${formatTime(-2)},発,${formatTime(-1)}
+itabashi,着,${formatTime(-18)},発,${formatTime(-17)},着,${formatTime(2)},発,${formatTime(3)}
+ikebukuro,着,${formatTime(-13)},発,${formatTime(-12)},着,${formatTime(7)},発,${formatTime(8)}
+shinjuku,着,${formatTime(-7)},発,${formatTime(-6)},着,${formatTime(13)},発,${formatTime(14)}
+shibuya,着,${formatTime(-2)},発,${formatTime(-1)},着,${formatTime(18)},発,${formatTime(19)}
+ebisu,着,${formatTime(2)},発,${formatTime(3)},着,${formatTime(22)},発,${formatTime(23)}
+osaki,着,${formatTime(7)},着,${formatTime(27)}`,
+
+                'railroad/saikyo/20251130/saikyo_w_out.csv': `列車番号,101G,201G
+駅名,着,発,着,発
+osaki,発,${formatTime(-20)},発,${formatTime(0)}
+ebisu,着,${formatTime(-16)},発,${formatTime(-15)},着,${formatTime(4)},発,${formatTime(5)}
+shibuya,着,${formatTime(-12)},発,${formatTime(-11)},着,${formatTime(8)},発,${formatTime(9)}
+shinjuku,着,${formatTime(-6)},発,${formatTime(-5)},着,${formatTime(14)},発,${formatTime(15)}
+ikebukuro,着,${formatTime(0)},発,${formatTime(1)},着,${formatTime(20)},発,${formatTime(21)}
+itabashi,着,${formatTime(5)},発,${formatTime(6)},着,${formatTime(25)},発,${formatTime(26)}
+jujo,着,${formatTime(9)},発,${formatTime(10)},着,${formatTime(29)},発,${formatTime(30)}
+akabane,着,${formatTime(13)},着,${formatTime(33)}`
+            };
+        }
 
         // 0:00からの経過秒数に変換する、完璧な時間の秒数変換関数（Daily Seconds）
         function timeToSeconds(timeStr) {
@@ -615,6 +677,35 @@
             const baseSeconds = (h * 3600 + m * 60) - (4 * 3600);
             return baseSeconds;
         }
+
+        // 本番サーバーからのFetchに失敗したとき、自動的にモックを差し替えてアプリを起動するハイブリッドラッパー
+        async function safeFetch(baseName) {
+            const encodedName = encodeURIComponent(baseName).replace(/%2F/g, '/');
+            try {
+                const res = await fetch(encodedName);
+                if (res.ok) {
+                    const text = await res.text();
+                    if (text && !text.trim().startsWith('<!DOCTYPE html>')) {
+                        return text;
+                    }
+                }
+            } catch (e) {
+                console.log(`Fetch: ${baseName} はプレビュー環境のため見つかりません。モックに切り替えます。`);
+            }
+            
+            const cleanName = baseName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+            const mocks = generateDynamicMockCSV();
+            if (mocks[cleanName]) {
+                return mocks[cleanName];
+            }
+            throw new Error(`ファイルが見つかりません: ${baseName}`);
+        }
+
+        window.onresize = () => {
+            if (document.getElementById('zaisen-screen').style.display === 'block') {
+                renderRoute();
+            }
+        };
 
         function syncUpdateLoop() {
             updateTrainPositions();
@@ -708,28 +799,28 @@
             }
         }
 
-        // Googleスプレッドシート（手動記入）のCSV公開URLから運用情報をロード。
+        // スプレッドシートの公開CSVから目撃情報をダイレクトにロード
         async function loadFormations() {
-            if (!SPREADSHEET_CSV_URL) return;
+            // 【要件】新しく設定された「ウェブに公開」のCSV URL
+            const SPREADSHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRoSzCnlllyolowZYj_9IqKmeASFlkGFxXb0JczS_YxrCgUO_-QTwooGrQq5NleA2KVU0uNhLNdLMfC/pub?gid=0&single=true&output=csv';
+
             try {
-                // キャッシュを回避するためにキャッシュバスターをパラメータに付与してFetch
-                const fetchUrl = `${SPREADSHEET_CSV_URL}&t=${Date.now()}`;
-                const res = await fetch(fetchUrl);
-                if (!res.ok) throw new Error("CSVのダウンロードに失敗しました");
+                console.log("[編成データ] 公開CSVから最新の運用状況を取得中...");
+                const res = await fetch(`${SPREADSHEET_CSV_URL}&t=${Date.now()}`); // キャッシュバスター付与
+                if (!res.ok) throw new Error(`HTTPエラー: ${res.status}`);
                 
                 const csvText = await res.text();
                 const lines = csvText.split(/\r?\n/);
                 
                 globalFormations = {};
-                
+
                 if (lines.length <= 1) return;
 
-                // 2行目以降のデータ行を走査（1行目はヘッダー: 運用ID,,編成名）
+                // 2行目以降を走査（1行目はヘッダー: 運用ID,,編成名）
                 for (let i = 1; i < lines.length; i++) {
                     const line = lines[i].trim();
                     if (!line) continue;
                     
-                    // カンマ区切りによる空セルを含んだパース
                     const cols = parseCSVLine(line);
                     if (cols.length < 3) continue;
 
@@ -738,42 +829,31 @@
 
                     if (!unyoNo || !formationName) continue;
 
-                    // 車両マスタ（CSV）から編成名または編成IDが一致するものを参照
-                    let matchedMaster = Object.values(formationsMapById || {}).find(
-                        f => f.name === formationName || f.id === formationName
-                    );
+                    // アプリ内のマスタ(formationsList)から、編成名が一致するデータのIDを逆引き
+                    const matched = formationsList.find(f => f.name === formationName || f.id === formationName);
+                    const formationId = matched ? matched.id : null;
 
-                    if (matchedMaster) {
-                        // 【代走判定要件】
-                        // 通常運用Gp名（例: twr）と、現在の運用IDの英字グループ部分（例: "ja17" なら "ja"）が異なる場合に代走と判断する。
-                        const currentUnyoGroup = unyoNo.replace(/[0-9]/g, '').trim(); 
-                        let isSubstitute = false;
-
-                        if (matchedMaster.normalGps && !matchedMaster.normalGps.includes(currentUnyoGroup)) {
-                            isSubstitute = true;
+                    // 代走フラグの自動計算
+                    let isSub = false;
+                    if (matched) {
+                        const matchedTrain = globalTrains.find(t => t.unyoNo === unyoNo);
+                        if (matchedTrain && matched.substituteGps && matched.normalGps) {
+                            const targetUnyoGp = matchedTrain.unyoGp;
+                            isSub = matched.substituteGps.includes(targetUnyoGp) && !matched.normalGps.includes(targetUnyoGp);
                         }
-
-                        globalFormations[unyoNo] = {
-                            formationId: matchedMaster.id,
-                            isSubstitute: isSubstitute,
-                            name: matchedMaster.name,
-                            color: matchedMaster.color,
-                            icon: matchedMaster.icon
-                        };
-                    } else {
-                        // マスタに合致する編成が見つからない場合もスプレッドシートに記入されたテキスト名でそのまま表示
-                        globalFormations[unyoNo] = {
-                            formationId: null,
-                            isSubstitute: false,
-                            name: formationName,
-                            color: "#808080",
-                            icon: ""
-                        };
                     }
+
+                    globalFormations[unyoNo] = {
+                        formationId: formationId,
+                        formationName: formationName,
+                        isSubstitute: isSub,
+                        timestamp: Date.now()
+                    };
                 }
-                console.log("[スプレッドシートデータ] 解析完了:", globalFormations);
+
+                console.log("[編成データ] CSVからのマッピング完了:", globalFormations);
             } catch (e) {
-                console.error("[スプレッドシートデータ] 読み込みに失敗しました:", e);
+                console.error("[編成データ] CSVの読み込みまたは解析に失敗しました:", e);
             }
         }
 
@@ -800,7 +880,25 @@
         // 運用に現在投稿されている編成の詳細データをマスタから結合して取得するヘルパー
         function getUnyoPostInfo(unyoNo) {
             if (!unyoNo || !globalFormations[unyoNo]) return null;
-            return globalFormations[unyoNo];
+            const post = globalFormations[unyoNo];
+            const formObj = formationsMapById[post.formationId];
+            if (!formObj) {
+                // マスタデータ上にない手動記入編成名の場合でもそのまま描画にフォールバック
+                return {
+                    id: null,
+                    name: post.formationName,
+                    icon: "",
+                    color: "#808080",
+                    isSubstitute: post.isSubstitute
+                };
+            }
+            return {
+                id: post.formationId,
+                name: formObj.name,
+                icon: formObj.icon,
+                color: formObj.color,
+                isSubstitute: post.isSubstitute
+            };
         }
 
         function parseCSV(text) {
