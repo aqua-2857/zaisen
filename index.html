@@ -566,7 +566,7 @@
         const SPREADSHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/14HFBZeM7p89SN8jWgXzm2j6iA94UrzcGAynDgaU8gB4/pub?output=csv'; 
 
         // 自動リロード機能用の管理変数
-        const RELOAD_INTERVAL_MS = 30000; // 30秒ごとに自動同期
+        const RELOAD_INTERVAL_MS = 60000; // 【要件】1分(60秒)ごとに自動同期
         let autoReloadTimerId = null;
         let lastFormationsHash = ""; // データの変更検知用ハッシュ
 
@@ -761,7 +761,7 @@
                             icon: matchedMaster.icon
                         };
                     } else {
-                        // マスタに合致する編成が見見つからない場合もスプレッドシートに記入されたテキスト名でそのまま表示
+                        // マスタに合致する編成が見つからない場合もスプレッドシートに記入されたテキスト名でそのまま表示
                         globalFormations[unyoNo] = {
                             formationId: null,
                             isSubstitute: false,
@@ -959,14 +959,13 @@
                 const ty = targetDate.getFullYear();
                 const tm = targetDate.getMonth() + 1;
                 const td = targetDate.getDate();
-                const targetStr = `${ty}/${tm}/${td}`;
-                const targetStrZero = `${ty}/${String(tm).padStart(2,'0')}/${String(td).padStart(2,'0')}`;
+                const targetStr = `${ty}/${String(tm).padStart(2,'0')}/${String(td).padStart(2,'0')}`;
 
                 for(let i = 1; i < lines.length; i++) {
                     const cols = lines[i].split(',');
                     if(cols[0]) {
                         const csvDate = cols[0].trim();
-                        if(csvDate === targetStr || csvDate === targetStrZero) {
+                        if(csvDate === targetStr) {
                             return true;
                         }
                     }
