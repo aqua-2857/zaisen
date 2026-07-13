@@ -249,7 +249,6 @@
             margin-bottom: 2px;
             line-height: 1.1;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            position: relative;
         }
 
         .train-icon {
@@ -531,7 +530,9 @@
     <div id="train-modal" class="modal-overlay" style="display:none;" onclick="closeTrainModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
+                <!-- 投稿画面への遷移ボタンは常に非表示（非アクティブ化）にします -->
                 <span id="train-modal-no" class="modal-header-title-left">列車番号</span>
+                <button id="btn-post-from-train-modal" style="margin-right: 35px; padding: 6px 12px; background: white; color: #111; border: none; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer; display: none;">運用投稿</button>
                 <button class="modal-close-btn" onclick="closeTrainModal()">×</button>
             </div>
             <div class="modal-scroll-body">
@@ -541,6 +542,30 @@
                     <span id="train-modal-formation-text" style="font-weight: bold; font-size: 1rem;"></span>
                 </div>
                 <div id="train-timetable-list" class="timetable-table"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 投稿用モーダルはJSの参照エラーを防ぐためDOM構造としてのみ残し、一切表示させません -->
+    <div id="formation-modal" class="modal-overlay" style="display:none;" onclick="closeFormationModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-header-title-left">編成情報の投稿</span>
+                <button class="modal-close-btn" onclick="closeFormationModal()">×</button>
+            </div>
+            <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:12px;">
+                <div style="font-size:0.95rem;">列車番号: <span id="form-train-no" style="font-weight:bold;"></span></div>
+                <div style="font-size:0.95rem;">対象運用: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
+                <label style="display:flex; flex-direction:column; gap:6px; font-weight:bold; font-size:0.9rem; margin-top:5px;">
+                    編成を選択してください:
+                    <select id="select-formation-id" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;">
+                        <option value="">-- 編成を選択 --</option>
+                    </select>
+                </label>
+                <div style="display:flex; gap: 8px; margin-top:8px;">
+                    <button onclick="submitFormation()" style="flex: 1; padding:12px; background:var(--btn-color); color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer;">投稿する</button>
+                    <button id="btn-delete-post" onclick="deleteFormationPost()" style="flex: 1; padding:12px; background:#FF3B30; color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer; display:none;">投稿を取り消す</button>
+                </div>
             </div>
         </div>
     </div>
@@ -558,16 +583,13 @@
         let globalTrains = []; 
         let loadedTimetablePaths = new Set(); // 重複ロード防止用キャッシュ
 
-        // 登録車両データ (zaisen - formation_id.csv) とスプレッドシートよりフェッチした運用情報の格納用
+        // 登録車両データ (zaisen - formation_id.csv) と投稿された目撃情報の格納用
         let formationsList = []; // 登録車両マスタデータ
         let formationsMapById = {}; // マスタキャッシュ用
-        let globalFormations = {}; // 本日の手動CSVデータ
-
-        // 手動書き込み型公開スプレッドシートのCSV公開URLに直結
-        const SPREADSHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRoSzCnlllyolowZYj_9IqKmeASFlkGFxXb0JczS_YxrCgUO_-QTwooGrQq5NleA2KVU0uNhLNdLMfC/pub?gid=0&single=true&output=csv'; 
+        let globalFormations = {}; // 本日の投稿データ
 
         // 自動リロード機能用の管理変数
-        const RELOAD_INTERVAL_MS = 60000; // 1分(60秒)ごとに自動同期
+        const RELOAD_INTERVAL_MS = 60000; // 【要件】1分(60秒)ごとに自動同期
         let autoReloadTimerId = null;
         let lastFormationsHash = ""; // データの変更検知用ハッシュ
 
@@ -633,27 +655,39 @@ akabane,saikyo,,,`,
 shinjuku,saikyo,ol,saikyo,saikyo-1,赤羽方面
 shibuya,saikyo,,,
 ebisu,saikyo,,,
-osaki,saikyo,,,`
+osaki,saikyo,,,`,
+
+                'railroad/saikyo/20251130/saikyo_w_op.csv': `運用ID,運用番号,列車1,列車2,列車3
+ja17,ja17,100G,101G,102G
+soja71,soja71,200G,201G,202G`,
+
+                'railroad/saikyo/20251130/saikyo_w_in.csv': `列車番号,100G,200G
+駅名,着,発,着,発
+akabane,発,${formatTime(-25)},発,${formatTime(-5)}
+jujo,着,${formatTime(-22)},発,${formatTime(-21)},着,${formatTime(-2)},発,${formatTime(-1)}
+itabashi,着,${formatTime(-18)},発,${formatTime(-17)},着,${formatTime(2)},発,${formatTime(3)}
+ikebukuro,着,${formatTime(-13)},発,${formatTime(-12)},着,${formatTime(7)},発,${formatTime(8)}
+shinjuku,着,${formatTime(-7)},発,${formatTime(-6)},着,${formatTime(13)},発,${formatTime(14)}
+shibuya,着,${formatTime(-2)},発,${formatTime(-1)},着,${formatTime(18)},発,${formatTime(19)}
+ebisu,着,${formatTime(2)},発,${formatTime(3)},着,${formatTime(22)},発,${formatTime(23)}
+osaki,着,${formatTime(7)},着,${formatTime(27)}`,
+
+                'railroad/saikyo/20251130/saikyo_w_out.csv': `列車番号,101G,201G
+駅名,着,発,着,発
+osaki,発,${formatTime(-20)},発,${formatTime(0)}
+ebisu,着,${formatTime(-16)},発,${formatTime(-15)},着,${formatTime(4)},発,${formatTime(5)}
+shibuya,着,${formatTime(-12)},発,${formatTime(-11)},着,${formatTime(8)},発,${formatTime(9)}
+shinjuku,着,${formatTime(-6)},発,${formatTime(-5)},着,${formatTime(14)},発,${formatTime(15)}
+ikebukuro,着,${formatTime(0)},発,${formatTime(1)},着,${formatTime(20)},発,${formatTime(21)}
+itabashi,着,${formatTime(5)},発,${formatTime(6)},着,${formatTime(25)},発,${formatTime(26)}
+jujo,着,${formatTime(9)},発,${formatTime(10)},着,${formatTime(29)},発,${formatTime(30)}
+akabane,着,${formatTime(13)},着,${formatTime(33)}`,
+
+                'zaisen - formation_id.csv': `\ufeff編成ID,編成名,アイコン,カラー,通常運用Gp,代走運用Gp,編成特記事項
+hae117,ﾊｴ117,hae,#00b261,ja,soja,
+hae101,ﾊｴ101,hae,#ff0000,ja,soja,
+Z3,Z3,twr,#0000ff,twr,ja,`
             };
-        }
-
-        // 0:00からの経過秒数に変換する、完璧な時間の秒数変換関数（Daily Seconds）
-        function timeToSeconds(timeStr) {
-            if (!timeStr) return null;
-            const clean = timeStr.replace(':', '').trim();
-            if (clean.length < 3) return null;
-
-            let h = parseInt(clean.substring(0, clean.length - 2), 10);
-            const m = parseInt(clean.substring(clean.length - 2), 10);
-            
-            // 0:00～3:59 (h < 4) の深夜表記の列車は、24時間プラス（24:00～27:59）として計算
-            if (h < 4) {
-                h += 24;
-            }
-            
-            // 4:00 AM を「0秒基準」として、一日のタイムライン経過秒数を算出
-            const baseSeconds = (h * 3600 + m * 60) - (4 * 3600);
-            return baseSeconds;
         }
 
         // 本番サーバーからのFetchに失敗したとき、自動的にモックを差し替えてアプリを起動するハイブリッドラッパー
@@ -668,7 +702,7 @@ osaki,saikyo,,,`
                     }
                 }
             } catch (e) {
-                console.warn(`Fetch: ${baseName} の読み込みに失敗しました。モックデータを使用します。`);
+                console.log(`Fetch: ${baseName} はプレビュー環境のため見つかりません。モックに切り替えます。`);
             }
             
             const cleanName = baseName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
@@ -729,27 +763,19 @@ osaki,saikyo,,,`
             }
         }
 
-        // 初期化処理（フリーズ対策＆頑健化を徹底）
+        // ノンブロッキング初期化設計に調整
         async function initApp() {
-            try {
-                await loadMasters().catch(e => console.error("駅マスタ読み込みエラー:", e));
-            } catch (e) {}
-
-            try {
-                await loadFormationsCSV().catch(e => console.error("編成マスタ読み込みエラー:", e));
-            } catch (e) {}
-
-            try {
-                await loadInfoAndGenerateButtons().catch(e => console.error("路線ボタン生成エラー:", e));
-            } catch (e) {}
+            await loadMasters();
+            await loadFormationsCSV(); // 登録車両データの読み込みと編成IDマスタ化
+            await loadInfoAndGenerateButtons();
             
-            // スプレッドシートからの読み込みを非同期で開始
+            // loadFormationsは非同期で裏で走らせ、完了後に列車位置を再計算。
             loadFormations().then(() => {
                 lastFormationsHash = JSON.stringify(globalFormations);
                 if (document.getElementById('zaisen-screen').style.display === 'block') {
                     updateTrainPositions();
                 }
-            }).catch(e => console.error("スプレッドシート連動エラー:", e));
+            });
         }
 
         // zaisen - formation_id.csv のロード。各編成に割り当てられた情報をマスタ配列化。
@@ -768,6 +794,7 @@ osaki,saikyo,,,`
                             name: (row['編成名'] || '').trim(),
                             icon: (row['アイコン'] || '').trim(),
                             color: (row['カラー'] || '').trim(),
+                            // カンマ区切りの複数運用グループを配列へ分割
                             normalGps: (row['通常運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
                             substituteGps: (row['代走運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
                             notes: (row['編成特記事項'] || '').trim()
@@ -782,7 +809,7 @@ osaki,saikyo,,,`
             }
         }
 
-        // スプレッドシートの公開CSVから目撃情報をダイレクトにロード
+        // 【要件】スプレッドシートの公開CSVから目撃情報をダイレクトにロード
         async function loadFormations() {
             if (!SPREADSHEET_CSV_URL) return;
             try {
@@ -841,7 +868,7 @@ osaki,saikyo,,,`
             }
         }
 
-        // CSV一行をカンマで正確にパースするヘルパー
+        // CSVの1行をカンマで正確にパースするヘルパー
         function parseCSVLine(line) {
             let result = [];
             let current = '';
@@ -936,36 +963,33 @@ osaki,saikyo,,,`
             return routeId || '';
         }
 
-        // ホーム画面のボタン生成（フォールバック時もボタンが絶対に生成されるよう安全回路を設置）
         async function loadInfoAndGenerateButtons() {
-            let infoData = [];
             try {
                 const textInfo = await safeFetch('zaisen - info.csv');
-                infoData = parseCSV(textInfo);
+                const infoData = parseCSV(textInfo);
+
+                const homeScreen = document.getElementById('home-screen');
+                homeScreen.innerHTML = '';
+                infoData.forEach(row => {
+                    const sysId = row['路線系統'];
+                    const sysName = row['路線系統表示名'] || sysId;
+                    if (!sysId) return;
+
+                    systemNameMap[sysId] = sysName;
+                                    
+                    if (!activeLayouts[sysId]) {
+                        activeLayouts[sysId] = `display/${sysId}-1.csv`; 
+                    }
+
+                    const btn = document.createElement('button');
+                    btn.className = 'system-btn';
+                    btn.innerText = sysName;
+                    btn.onclick = () => loadZaisen(sysId);
+                    homeScreen.appendChild(btn);
+               });
             } catch (e) {
-                console.warn("info.csv の読み込みに失敗。プレビュー用デフォルト系統を生成します。");
-                infoData = [{ '路線系統': 'saikyo', '路線系統表示名': '埼京線' }];
+                console.error("info.csvの読み込みに失敗:", e.message);
             }
-
-            const homeScreen = document.getElementById('home-screen');
-            homeScreen.innerHTML = '';
-            infoData.forEach(row => {
-                const sysId = row['路線系統'];
-                const sysName = row['路線系統表示名'] || sysId;
-                if (!sysId) return;
-
-                systemNameMap[sysId] = sysName;
-                                
-                if (!activeLayouts[sysId]) {
-                    activeLayouts[sysId] = `display/${sysId}-1.csv`; 
-                }
-
-                const btn = document.createElement('button');
-                btn.className = 'system-btn';
-                btn.innerText = sysName;
-                btn.onclick = () => loadZaisen(sysId);
-                homeScreen.appendChild(btn);
-            });
         }
 
         function scrollToStation(stationId) {
@@ -1612,12 +1636,12 @@ osaki,saikyo,,,`
                 if (postInfo.isSubstitute) {
                     const ast = document.createElement('span');
                     ast.style.cssText = `
-                        font-size: 11px;
+                        font-size: 8px;
                         font-weight: bold;
                         color: red;
                         vertical-align: super;
                         position: absolute;
-                        top: -2px;
+                        top: -1px;
                         right: -4px;
                     `;
                     ast.innerText = '*';
@@ -1908,6 +1932,9 @@ osaki,saikyo,,,`
                 formTextEl.innerText = '';
             }
 
+            // 投稿導線は要件通り常に隠します（操作不可）
+            document.getElementById('btn-post-from-train-modal').style.display = 'none';
+
             const listContainer = document.getElementById('train-timetable-list');
             listContainer.innerHTML = '';
 
@@ -1988,6 +2015,13 @@ osaki,saikyo,,,`
             document.getElementById('train-modal').style.display = 'none';
         }
 
+        // ダミー（未使用だが元の記述を無傷で残してエラー防止）
+        function openFormationModal(unyoNo, trainNo, unyoGp) {}
+        function closeFormationModal() {}
+        function submitFormation() {}
+        function deleteFormationPost() {}
+
+        // 定期自動リロード処理
         async function syncLatestFormations() {
             const zaisenScreen = document.getElementById('zaisen-screen');
             if (!zaisenScreen || zaisenScreen.style.display !== 'block') {
