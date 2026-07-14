@@ -226,23 +226,20 @@
             z-index: 10;
         }
 
-        /* 列車アイコンを完全にエリアの垂直中心(yPos)に合わせるための指定 */
+        /* 列車表示位置およびサイズを以前の仕様に完全に戻す */
         .train-container {
             position: absolute;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            width: 70px;
-            height: 70px;
+            justify-content: flex-end;
+            width: 60px;
+            height: 60px;
             pointer-events: auto; 
             cursor: pointer;
-            transform: translate(-50%, -50%); /* 中心点を完全に同期 */
         }
 
         .train-no-label {
-            position: absolute;
-            bottom: 100%;
-            margin-bottom: 2px;
             font-size: 10px;
             font-weight: bold;
             color: #111;
@@ -250,6 +247,7 @@
             padding: 1px 3px;
             border-radius: 3px;
             white-space: nowrap;
+            margin-bottom: 2px;
             line-height: 1.1;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
@@ -258,22 +256,6 @@
             width: 24px;
             height: 24px;
             object-fit: contain;
-            z-index: 2;
-        }
-
-        /* 位置情報画面の編成名表示用ラベル */
-        .train-formation-label {
-            position: absolute;
-            top: 100%;
-            margin-top: 2px;
-            font-size: 9px;
-            font-weight: bold;
-            background-color: rgba(255, 255, 255, 0.85);
-            padding: 1px 3px;
-            border-radius: 3px;
-            white-space: nowrap;
-            line-height: 1.1;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
         .branch-clickable-container {
@@ -793,7 +775,7 @@
             try {
                 // キャッシュ回避用のタイムスタンプパラメータを付与してfetch
                 const res = await fetch(`${SPREADSHEET_CSV_URL}&t=${Date.now()}`);
-                if (!res.ok) throw new Error("スプレッドシートCSVのフェッチに失敗しました");
+                if (!res.ok) throw new Error("スプレッドシートCSV of フェッチに失敗しました");
                 const csvText = await res.text();
                 const rawRows = parseCSV(csvText);
 
@@ -1597,10 +1579,21 @@
             container.appendChild(label);
             container.appendChild(icon);
 
-            // 投稿されているもののみ編成名ラベルを生成・表示。未投稿なら空白。
+            // 投稿されている編成名ラベルを以前のスタイル・ブロック位置に完全に戻す
             if (postInfo && postInfo.name) {
                 const formLabel = document.createElement('div');
-                formLabel.className = 'train-formation-label'; // CSSクラスを適用
+                formLabel.style.cssText = `
+                    font-size: 9px;
+                    font-weight: bold;
+                    background-color: rgba(255, 255, 255, 0.85);
+                    padding: 1px 3px;
+                    border-radius: 3px;
+                    margin-top: 2px;
+                    white-space: nowrap;
+                    line-height: 1.1;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    position: relative;
+                `;
                 formLabel.innerText = postInfo.name;
                 
                 if (postInfo.isSubstitute) {
@@ -1609,13 +1602,14 @@
                         font-size: 8px;
                         font-weight: bold;
                         color: red;
+                        vertical-align: super;
                         position: absolute;
                         top: -1px;
-                        left: 100%; /* スペースなしで右側に浮かす */
-                        line-height: 1;
+                        right: -4px;
                     `;
                     ast.innerText = '*';
                     formLabel.appendChild(ast);
+                    formLabel.style.paddingRight = '6px';
                 }
                 
                 container.appendChild(formLabel);
@@ -1626,14 +1620,14 @@
                 openTrainModal(train, displayNo);
             };
 
-            // container.style.top を中心の yPos にダイレクトに指定（CSSのtranslate(-50%, -50%)により完全同期）
-            container.style.top = `${yPos}px`;
+            // containerの垂直位置関係を以前の仕様（yPos - 38px）に完全差し戻し
+            container.style.top = `${yPos - 38}px`;
 
             const offset = 30 + (index * 35);
             if (dir === 'in') {
-                container.style.left = `${lineX - offset}px`; 
+                container.style.left = `${lineX - offset - 30}px`; 
             } else {
-                container.style.left = `${lineX + offset}px`; 
+                container.style.left = `${lineX + offset - 30}px`; 
             }
             
             document.getElementById('train-layer').appendChild(container);
@@ -1810,12 +1804,7 @@
                         timeDiv.innerText = String(item.minute).padStart(2, '0');
                     }
 
-                    // 代走運用の時、アスタリスクを absolute配置にすることで、本体テキストの中心軸に一切干渉せず右上に浮き上がらせる
-                    if (postInfo && postInfo.isSubstitute) {
-                        timeDiv.style.position = 'relative';
-                        timeDiv.style.paddingRight = '0px'; // スペースを排除
-                        timeDiv.innerHTML = timeDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; position: absolute; top: -1px; left: 100%; line-height: 1;">*</span>';
-                    }
+                    // ★時刻のところにはアスタリスクを表示しない（以前のコード部分を削除）★
 
                     // 駅時刻表の「発車時刻の下」に表示する編成名要素
                     let formDiv = document.createElement('div');
@@ -1828,7 +1817,7 @@
                         if (postInfo.color) {
                             formDiv.style.color = postInfo.color;
                         }
-                        // 編成名のアスタリスクも absolute 配置して、編成名自体の表示中央を完璧に保つ
+                        // ★駅時刻表で編成名のところのみにアスタリスク（代走マーク）を表示する★
                         if (postInfo.isSubstitute) {
                             formDiv.innerHTML = formDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; position: absolute; top: -1px; left: 100%; line-height: 1;">*</span>';
                         }
