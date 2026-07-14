@@ -226,20 +226,24 @@
             z-index: 10;
         }
 
-        /* 列車表示位置およびサイズを以前の仕様に完全に戻す */
+        /* 列車アイコンを縦の並び順（列車番号が上、アイコンが中央、編成名が下）を崩さずに、アイコンの中心を垂直中央に合わせる */
         .train-container {
             position: absolute;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: center;
             width: 60px;
-            height: 60px;
+            height: 24px; /* アイコン自体の高さ(24px)に揃える */
             pointer-events: auto; 
             cursor: pointer;
+            transform: translate(-50%, -50%); /* コンテナ（＝アイコン）の中心を完全にyPosに固定 */
         }
 
         .train-no-label {
+            position: absolute;
+            bottom: 100%; /* アイコンの真上にスタック */
+            margin-bottom: 2px;
             font-size: 10px;
             font-weight: bold;
             color: #111;
@@ -247,7 +251,6 @@
             padding: 1px 3px;
             border-radius: 3px;
             white-space: nowrap;
-            margin-bottom: 2px;
             line-height: 1.1;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
@@ -256,6 +259,21 @@
             width: 24px;
             height: 24px;
             object-fit: contain;
+            z-index: 2;
+        }
+
+        .train-formation-label {
+            position: absolute;
+            top: 100%; /* アイコンの真下にスタック */
+            margin-top: 2px;
+            font-size: 9px;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 1px 3px;
+            border-radius: 3px;
+            white-space: nowrap;
+            line-height: 1.1;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
         .branch-clickable-container {
@@ -775,7 +793,7 @@
             try {
                 // キャッシュ回避用のタイムスタンプパラメータを付与してfetch
                 const res = await fetch(`${SPREADSHEET_CSV_URL}&t=${Date.now()}`);
-                if (!res.ok) throw new Error("スプレッドシートCSV of フェッチに失敗しました");
+                if (!res.ok) throw new Error("スプレッドシートCSVのフェッチに失敗しました");
                 const csvText = await res.text();
                 const rawRows = parseCSV(csvText);
 
@@ -1579,21 +1597,10 @@
             container.appendChild(label);
             container.appendChild(icon);
 
-            // 投稿されている編成名ラベルを以前のスタイル・ブロック位置に完全に戻す
+            // 投稿されているもののみ編成名ラベルを生成・表示。未投稿なら空白。
             if (postInfo && postInfo.name) {
                 const formLabel = document.createElement('div');
-                formLabel.style.cssText = `
-                    font-size: 9px;
-                    font-weight: bold;
-                    background-color: rgba(255, 255, 255, 0.85);
-                    padding: 1px 3px;
-                    border-radius: 3px;
-                    margin-top: 2px;
-                    white-space: nowrap;
-                    line-height: 1.1;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                    position: relative;
-                `;
+                formLabel.className = 'train-formation-label'; // 定義したCSSクラスを適用して元の位置関係に配置
                 formLabel.innerText = postInfo.name;
                 
                 if (postInfo.isSubstitute) {
@@ -1602,14 +1609,13 @@
                         font-size: 8px;
                         font-weight: bold;
                         color: red;
-                        vertical-align: super;
                         position: absolute;
                         top: -1px;
-                        right: -4px;
+                        left: 100%; /* 編成名自体の表示中央を完璧に保ちつつ、右端に寄せる */
+                        line-height: 1;
                     `;
                     ast.innerText = '*';
                     formLabel.appendChild(ast);
-                    formLabel.style.paddingRight = '6px';
                 }
                 
                 container.appendChild(formLabel);
@@ -1620,14 +1626,14 @@
                 openTrainModal(train, displayNo);
             };
 
-            // containerの垂直位置関係を以前の仕様（yPos - 38px）に完全差し戻し
-            container.style.top = `${yPos - 38}px`;
+            // yPosをダイレクトに設定 (CSSのtranslate(-50%, -50%)によってアイコンの中心が完全に揃う)
+            container.style.top = `${yPos}px`;
 
             const offset = 30 + (index * 35);
             if (dir === 'in') {
-                container.style.left = `${lineX - offset - 30}px`; 
+                container.style.left = `${lineX - offset}px`; 
             } else {
-                container.style.left = `${lineX + offset - 30}px`; 
+                container.style.left = `${lineX + offset}px`; 
             }
             
             document.getElementById('train-layer').appendChild(container);
