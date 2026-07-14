@@ -847,6 +847,8 @@
         function getUnyoPostInfo(unyoNo) {
             if (!unyoNo || !globalFormations[unyoNo]) return null;
             const post = globalFormations[unyoNo];
+            if (!post.formationName && !post.formationId) return null; // 未投稿、または空値は空白にする
+            
             const formObj = formationsMapById[post.formationId];
             
             // マスタ登録されていない即席の編成名が投稿された場合でも表示できるようにフォールバック
@@ -1199,6 +1201,7 @@
                         id: "merged_" + gId,
                         unyoGp: matchedRule ? matchedRule.unyoGp : "unknown",
                         unyoNo: matchedRule ? matchedRule.unyoNo : "",
+                        unyoId: matchedRule ? matchedRule.unyoId : "", // 運用IDをマージデータ内に保持
                         components: [],
                         stops: {}
                     };
@@ -1575,6 +1578,7 @@
             container.appendChild(label);
             container.appendChild(icon);
 
+            // 投稿されているもののみ編成名ラベルを生成・表示。未投稿なら空白。
             if (postInfo && postInfo.name) {
                 const formLabel = document.createElement('div');
                 formLabel.style.cssText = `
@@ -1805,8 +1809,23 @@
                         timeDiv.innerHTML = timeDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; vertical-align: super; position: absolute; top: -1px; right: -2px;">*</span>';
                     }
 
+                    // 駅時刻表の「発車時刻の下」に表示する編成名要素
+                    let formDiv = document.createElement('div');
+                    formDiv.className = 'min-cell-no'; // 列車番号と同じ大きさ・色にするため同じクラスを使用
+                    formDiv.style.marginTop = '2px';
+                    
+                    if (postInfo && postInfo.name) {
+                        formDiv.innerText = postInfo.name;
+                        if (postInfo.color) {
+                            formDiv.style.color = postInfo.color;
+                        }
+                    } else {
+                        formDiv.innerText = ''; // 未投稿のものは空白
+                    }
+
                     cell.appendChild(noDiv);
                     cell.appendChild(timeDiv);
+                    cell.appendChild(formDiv); // 発車時刻の下に格納
                     minsCol.appendChild(cell);
                 });
 
@@ -1896,7 +1915,8 @@
                 postBtn.style.display = 'block';
                 postBtn.onclick = () => {
                     closeTrainModal();
-                    openFormationModal(train.unyoNo, trainNo, train.unyoGp);
+                    // 投稿時に「運用ID」を渡すため train.unyoId も引数に格納
+                    openFormationModal(train.unyoNo, trainNo, train.unyoGp, train.unyoId);
                 };
             } else {
                 postBtn.style.display = 'none';
@@ -1983,9 +2003,12 @@
         }
 
         // --- 編成投稿用のモーダル制御ロジック群 ---
-        function openFormationModal(unyoNo, trainNo, unyoGp) {
+        function openFormationModal(unyoNo, trainNo, unyoGp, unyoId) {
             document.getElementById('form-train-no').innerText = trainNo;
             document.getElementById('form-unyo-no').innerText = unyoNo;
+            
+            // 投稿時に送信するために運用IDをDOMのデータセット属性に保持させる
+            document.getElementById('form-unyo-no').dataset.unyoId = unyoId || '';
             
             const selectEl = document.getElementById('select-formation-id');
             selectEl.innerHTML = '<option value="">-- 編成を選択 --</option>';
@@ -2025,6 +2048,8 @@
 
         async function submitFormation() {
             const unyoNo = document.getElementById('form-unyo-no').innerText;
+            // モーダルオープン時に保持しておいた運用ID（unyoId）を取得
+            const unyoId = document.getElementById('form-unyo-no').dataset.unyoId || '';
             const selectEl = document.getElementById('select-formation-id');
             const formationId = selectEl.value;
 
@@ -2051,7 +2076,8 @@
 
             try {
                 // CORS制限・302リダイレクト・例外エラーを安全に回避するための「JSONP投稿」を実施（書き込み用）
-                const url = `${GAS_API_URL}?action=post&unyoNo=${encodeURIComponent(unyoNo)}&formationId=${encodeURIComponent(formationId)}&formationName=${encodeURIComponent(formation.name)}&isSubstitute=${isSub}`;
+                // ★書き込むパラメータを formationId から unyoId へ変更★
+                const url = `${GAS_API_URL}?action=post&unyoNo=${encodeURIComponent(unyoNo)}&unyoId=${encodeURIComponent(unyoId)}&formationName=${encodeURIComponent(formation.name)}&isSubstitute=${isSub}`;
                 
                 await fetchJSONP(url);
                 
@@ -2123,4 +2149,3 @@
     </script>
 </body>
 </html>
-
