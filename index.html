@@ -421,7 +421,7 @@
         .min-cell-time {
             font-size: 0.95rem; font-weight: bold; color: #222; line-height: 1;
         }
-        /* 駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、(04)のようにカッコ書きの薄字（細身 of グレー）で書く。 */
+        /* 駅時刻表の通過列車は、取り消し線や"通"の文字は入れず、(04)のようにカッコ書きの薄字（細身のグレー）で書く。 */
         .min-cell-time.is-passing {
             color: #888; font-weight: normal; text-decoration: none;
         }
@@ -546,7 +546,7 @@
         </div>
     </div>
 
-    <!-- 投稿用モーダルはJSの参照エラーを防ぐためDOM構造としてのみ残し、一切表示させません -->
+    <!-- 投稿用モーダルはJSの参照エラーを防ぐためDOM構造としてのみ残し、表示させません -->
     <div id="formation-modal" class="modal-overlay" style="display:none;" onclick="closeFormationModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -617,102 +617,11 @@
         let currentModalDir = 'up'; 
         let currentModalTimeType = 'dep'; // 'dep'=発車時刻, 'arr'=到着時刻
 
-        // 実時間連動型のインテリジェントモックジェネレーター
-        // Canvasプレビュー時の「ファイルが見つかりません」によるフリーズを100%回避します
-        function generateDynamicMockCSV() {
-            const now = new Date();
-            const pad = (num) => String(Math.floor(num)).padStart(2, '0');
-            const formatTime = (offsetMinutes) => {
-                const d = new Date(now.getTime() + offsetMinutes * 60000);
-                return pad(d.getHours()) + ":" + pad(d.getMinutes());
-            };
-
-            return {
-                'zaisen - station_id.csv': `駅ID,駅名
-shinjuku,新宿
-ikebukuro,池袋
-itabashi,板橋
-jujo,十条
-akabane,赤羽
-shibuya,渋谷
-ebisu,恵比寿
-osaki,大崎`,
-
-                'zaisen - railroad_id.csv': `路線ID,路線名,ラインカラー,路線系統,時刻表ID,運用表ID
-saikyo,埼京線,#00b261,saikyo,saikyo,saikyo`,
-
-                'zaisen - info.csv': `路線系統,路線系統表示名
-saikyo,埼京線`,
-
-                'zaisen - calendar.csv': `路線系統,改正日,開始日,終了日,例外ダイヤ名
-saikyo,20251130,,,`,
-
-                'display/saikyo-1.csv': `駅ID,路線ID,分岐方向,分岐路線,表示先,分岐名称
-shinjuku,saikyo,or,saikyo,saikyo-2,渋谷・大崎方面
-ikebukuro,saikyo,,,
-itabashi,saikyo,,,
-jujo,saikyo,,,
-akabane,saikyo,,,`,
-
-                'display/saikyo-2.csv': `駅ID,路線ID,分岐方向,分岐路線,表示先,分岐名称
-shinjuku,saikyo,ol,saikyo,saikyo-1,赤羽方面
-shibuya,saikyo,,,
-ebisu,saikyo,,,
-osaki,saikyo,,,`,
-
-                'railroad/saikyo/20251130/saikyo_w_op.csv': `運用ID,運用番号,列車1,列車2,列車3
-ja17,ja17,100G,101G,102G
-soja71,soja71,200G,201G,202G`,
-
-                'railroad/saikyo/20251130/saikyo_w_in.csv': `列車番号,100G,200G
-駅名,着,発,着,発
-akabane,発,${formatTime(-25)},発,${formatTime(-5)}
-jujo,着,${formatTime(-22)},発,${formatTime(-21)},着,${formatTime(-2)},発,${formatTime(-1)}
-itabashi,着,${formatTime(-18)},発,${formatTime(-17)},着,${formatTime(2)},発,${formatTime(3)}
-ikebukuro,着,${formatTime(-13)},発,${formatTime(-12)},着,${formatTime(7)},発,${formatTime(8)}
-shinjuku,着,${formatTime(-7)},発,${formatTime(-6)},着,${formatTime(13)},発,${formatTime(14)}
-shibuya,着,${formatTime(-2)},発,${formatTime(-1)},着,${formatTime(18)},発,${formatTime(19)}
-ebisu,着,${formatTime(2)},発,${formatTime(3)},着,${formatTime(22)},発,${formatTime(23)}
-osaki,着,${formatTime(7)},着,${formatTime(27)}`,
-
-                'railroad/saikyo/20251130/saikyo_w_out.csv': `列車番号,101G,201G
-駅名,着,発,着,発
-osaki,発,${formatTime(-20)},発,${formatTime(0)}
-ebisu,着,${formatTime(-16)},発,${formatTime(-15)},着,${formatTime(4)},発,${formatTime(5)}
-shibuya,着,${formatTime(-12)},発,${formatTime(-11)},着,${formatTime(8)},発,${formatTime(9)}
-shinjuku,着,${formatTime(-6)},発,${formatTime(-5)},着,${formatTime(14)},発,${formatTime(15)}
-ikebukuro,着,${formatTime(0)},発,${formatTime(1)},着,${formatTime(20)},発,${formatTime(21)}
-itabashi,着,${formatTime(5)},発,${formatTime(6)},着,${formatTime(25)},発,${formatTime(26)}
-jujo,着,${formatTime(9)},発,${formatTime(10)},着,${formatTime(29)},発,${formatTime(30)}
-akabane,着,${formatTime(13)},着,${formatTime(33)}`,
-
-                'zaisen - formation_id.csv': `\ufeff編成ID,編成名,アイコン,カラー,通常運用Gp,代走運用Gp,編成特記事項
-hae117,ﾊｴ117,hae,#00b261,ja,soja,
-hae101,ﾊｴ101,hae,#ff0000,ja,soja,
-Z3,Z3,twr,#0000ff,twr,ja,`
-            };
-        }
-
-        // 本番サーバーからのFetchに失敗したとき、自動的にモックを差し替えてアプリを起動するハイブリッドラッパー
-        async function safeFetch(baseName) {
-            const encodedName = encodeURIComponent(baseName).replace(/%2F/g, '/');
-            try {
-                const res = await fetch(encodedName);
-                if (res.ok) {
-                    const text = await res.text();
-                    if (text && !text.trim().startsWith('<!DOCTYPE html>')) {
-                        return text;
-                    }
-                }
-            } catch (e) {}
-            
-            const cleanName = baseName.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-            const mocks = generateDynamicMockCSV();
-            if (mocks[cleanName]) {
-                return mocks[cleanName];
+        window.onresize = () => {
+            if (document.getElementById('zaisen-screen').style.display === 'block') {
+                renderRoute();
             }
-            throw new Error(`ファイルが見つかりません: ${baseName}`);
-        }
+        };
 
         // 0:00からの経過秒数に変換する、完璧な時間の秒数変換関数（Daily Seconds）
         function timeToSeconds(timeStr) {
@@ -855,10 +764,10 @@ Z3,Z3,twr,#0000ff,twr,ja,`
                     const cols = parseCSVLine(line);
                     if (cols.length < 5) continue;
 
-                    const postTimeStr = cols[0].trim();  // 投稿日時 (例: 2026/07/14 19:37:21)
-                    const unyoNo = cols[1].trim();       // 運用番号 (例: 71, 87)
-                    const unyoGp = cols[2].trim();       // 運用ID (例: ja71) -> 運用グループ判定に最適
-                    const formationName = cols[3].trim(); // 編成名 (例: ﾊｴ131)
+                    const postTimeStr = cols[0].trim();  // 投稿日時
+                    const unyoNo = cols[1].trim();       // 運用番号
+                    const unyoGp = cols[2].trim();       // 運用ID
+                    const formationName = cols[3].trim(); // 編成名
                     const isSubstituteFromSheet = cols[4].trim().toUpperCase() === 'TRUE'; // シートの代走フラグ
 
                     if (!unyoNo || !formationName) continue;
@@ -877,7 +786,6 @@ Z3,Z3,twr,#0000ff,twr,ja,`
                     const formationId = matched ? matched.id : null;
 
                     // 【代走運用判定】
-                    // スプレッドシートの「代走フラグ」がTRUEである、またはアプリ内の通常運用Gpに未登録・代走運用Gpに登録されている場合に代走と判断する。
                     let isSub = isSubstituteFromSheet;
                     if (!isSub && matched && unyoGp) {
                         const currentUnyoGroup = unyoGp.replace(/[0-9]/g, '').trim(); // 英字グループ部分
@@ -1473,7 +1381,7 @@ Z3,Z3,twr,#0000ff,twr,ja,`
                         timeDiv.innerText = String(item.minute).padStart(2, '0');
                     }
 
-                    // 代走運用の時、駅時刻表では時刻の右上にアスタリスクを表示
+                    // 代走運用の時、駅時刻表では時刻 of 右上にアスタリスクを表示
                     if (postInfo && postInfo.isSubstitute) {
                         timeDiv.style.position = 'relative';
                         timeDiv.style.paddingRight = '5px';
@@ -1701,3 +1609,4 @@ Z3,Z3,twr,#0000ff,twr,ja,`
     </script>
 </body>
 </html>
+
