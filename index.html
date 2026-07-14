@@ -226,19 +226,23 @@
             z-index: 10;
         }
 
+        /* 列車アイコンを完全にエリアの垂直中心(yPos)に合わせるための指定 */
         .train-container {
             position: absolute;
             display: flex;
-            flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
-            width: 60px;
-            height: 60px;
+            justify-content: center;
+            width: 70px;
+            height: 70px;
             pointer-events: auto; 
             cursor: pointer;
+            transform: translate(-50%, -50%); /* 中心点を完全に同期 */
         }
 
         .train-no-label {
+            position: absolute;
+            bottom: 100%;
+            margin-bottom: 2px;
             font-size: 10px;
             font-weight: bold;
             color: #111;
@@ -246,7 +250,6 @@
             padding: 1px 3px;
             border-radius: 3px;
             white-space: nowrap;
-            margin-bottom: 2px;
             line-height: 1.1;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
@@ -255,6 +258,22 @@
             width: 24px;
             height: 24px;
             object-fit: contain;
+            z-index: 2;
+        }
+
+        /* 位置情報画面の編成名表示用ラベル */
+        .train-formation-label {
+            position: absolute;
+            top: 100%;
+            margin-top: 2px;
+            font-size: 9px;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 1px 3px;
+            border-radius: 3px;
+            white-space: nowrap;
+            line-height: 1.1;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
         .branch-clickable-container {
@@ -1581,18 +1600,7 @@
             // 投稿されているもののみ編成名ラベルを生成・表示。未投稿なら空白。
             if (postInfo && postInfo.name) {
                 const formLabel = document.createElement('div');
-                formLabel.style.cssText = `
-                    font-size: 9px;
-                    font-weight: bold;
-                    background-color: rgba(255, 255, 255, 0.85);
-                    padding: 1px 3px;
-                    border-radius: 3px;
-                    margin-top: 2px;
-                    white-space: nowrap;
-                    line-height: 1.1;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-                    position: relative;
-                `;
+                formLabel.className = 'train-formation-label'; // CSSクラスを適用
                 formLabel.innerText = postInfo.name;
                 
                 if (postInfo.isSubstitute) {
@@ -1601,14 +1609,13 @@
                         font-size: 8px;
                         font-weight: bold;
                         color: red;
-                        vertical-align: super;
                         position: absolute;
                         top: -1px;
-                        right: -4px;
+                        left: 100%; /* スペースなしで右側に浮かす */
+                        line-height: 1;
                     `;
                     ast.innerText = '*';
                     formLabel.appendChild(ast);
-                    formLabel.style.paddingRight = '6px';
                 }
                 
                 container.appendChild(formLabel);
@@ -1619,13 +1626,14 @@
                 openTrainModal(train, displayNo);
             };
 
-            container.style.top = `${yPos - 38}px`;
+            // container.style.top を中心の yPos にダイレクトに指定（CSSのtranslate(-50%, -50%)により完全同期）
+            container.style.top = `${yPos}px`;
 
             const offset = 30 + (index * 35);
             if (dir === 'in') {
-                container.style.left = `${lineX - offset - 30}px`; 
+                container.style.left = `${lineX - offset}px`; 
             } else {
-                container.style.left = `${lineX + offset - 30}px`; 
+                container.style.left = `${lineX + offset}px`; 
             }
             
             document.getElementById('train-layer').appendChild(container);
@@ -1802,22 +1810,27 @@
                         timeDiv.innerText = String(item.minute).padStart(2, '0');
                     }
 
-                    // 代走運用の時、駅時刻表では時刻の右上にアスタリスクを表示
+                    // 代走運用の時、アスタリスクを absolute配置にすることで、本体テキストの中心軸に一切干渉せず右上に浮き上がらせる
                     if (postInfo && postInfo.isSubstitute) {
                         timeDiv.style.position = 'relative';
-                        timeDiv.style.paddingRight = '5px';
-                        timeDiv.innerHTML = timeDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; vertical-align: super; position: absolute; top: -1px; right: -2px;">*</span>';
+                        timeDiv.style.paddingRight = '0px'; // スペースを排除
+                        timeDiv.innerHTML = timeDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; position: absolute; top: -1px; left: 100%; line-height: 1;">*</span>';
                     }
 
                     // 駅時刻表の「発車時刻の下」に表示する編成名要素
                     let formDiv = document.createElement('div');
-                    formDiv.className = 'min-cell-no'; // 列車番号と同じ大きさ・色にするため同じクラスを使用
+                    formDiv.className = 'min-cell-no'; // 列車番号と同じ大きさにする
                     formDiv.style.marginTop = '2px';
+                    formDiv.style.position = 'relative';
                     
                     if (postInfo && postInfo.name) {
                         formDiv.innerText = postInfo.name;
                         if (postInfo.color) {
                             formDiv.style.color = postInfo.color;
+                        }
+                        // 編成名のアスタリスクも absolute 配置して、編成名自体の表示中央を完璧に保つ
+                        if (postInfo.isSubstitute) {
+                            formDiv.innerHTML = formDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; position: absolute; top: -1px; left: 100%; line-height: 1;">*</span>';
                         }
                     } else {
                         formDiv.innerText = ''; // 未投稿のものは空白
@@ -2013,22 +2026,33 @@
             const selectEl = document.getElementById('select-formation-id');
             selectEl.innerHTML = '<option value="">-- 編成を選択 --</option>';
 
-            // 編成に登録された通常運用Gpまたは代走運用Gpに合致する編成のみ選択肢に表示
-            const allowedFormations = formationsList.filter(form => {
-                return form.normalGps.includes(unyoGp) || form.substituteGps.includes(unyoGp);
+            // 通常運用Gpに合致する編成（通常運用）
+            const normalFormations = formationsList.filter(form => {
+                return form.normalGps.includes(unyoGp);
             });
 
-            allowedFormations.forEach(form => {
-                // 代走運用の判定 (代走運用Gpには入っているが、通常運用Gpには入っていない)
-                const isSub = form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
-                
+            // 代走運用Gpに合致するが、通常運用Gpに含まれない編成（代走専用）
+            const substituteFormations = formationsList.filter(form => {
+                return form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
+            });
+
+            // 1. 通常運用時の編成名の選択肢を先に追加
+            normalFormations.forEach(form => {
                 const opt = document.createElement('option');
                 opt.value = form.id;
-                opt.innerText = `${form.name} ${isSub ? '[代走]' : ''}`;
+                opt.innerText = form.name;
                 selectEl.appendChild(opt);
             });
 
-            // 既存の投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
+            // 2. 代走運用時の編成名の選択肢を次に追加
+            substituteFormations.forEach(form => {
+                const opt = document.createElement('option');
+                opt.value = form.id;
+                opt.innerText = `${form.name} [代走]`;
+                selectEl.appendChild(opt);
+            });
+
+            // 既存 of 投稿情報がある場合は選択状態にして「投稿を取り消す」ボタンを出す
             const currentPost = globalFormations[unyoNo];
             const deleteBtn = document.getElementById('btn-delete-post');
             
@@ -2076,7 +2100,6 @@
 
             try {
                 // CORS制限・302リダイレクト・例外エラーを安全に回避するための「JSONP投稿」を実施（書き込み用）
-                // ★書き込むパラメータを formationId から unyoId へ変更★
                 const url = `${GAS_API_URL}?action=post&unyoNo=${encodeURIComponent(unyoNo)}&unyoId=${encodeURIComponent(unyoId)}&formationName=${encodeURIComponent(formation.name)}&isSubstitute=${isSub}`;
                 
                 await fetchJSONP(url);
