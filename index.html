@@ -1,3 +1,4 @@
+<!-- 2026/07/13 - GASリアルタイムAPI連携版 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -607,10 +608,8 @@
         let formationsMapById = {}; // マスタキャッシュ用
         let globalFormations = {}; // 本日の投稿データ
 
-        // 新しいウェブアプリURL（書き込み・削除に使用）
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbw8zKKYBoQlPS-2lkQmqUvISvJAOFrA7i9mC1ydT-i25Fp1W73VdA4ekrxa4kk4xtc/exec'; 
-        // 読み込み先：公開スプレッドシートのCSV URL
-        const SPREADSHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTfTKp5iEi7VuH70X6f-47dPa1gRg9QRTbd5qvzKakgMzWOZLayE2disY7KaLZUY5Omg-Z9FGdkMZVO/pub?gid=0&single=true&output=csv';
+        // 新しいウェブアプリURL（登録・削除・取得すべてをこのURL経由で行います）
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxMsdXLRfoinTCSOuyUPxRKV_JPyfJ3ZvO5rmLS8f6ts3OLW6Bl9jyWg-jgJ5jslLd6fQ/exec'; 
 
         /* 駅・駅間エリアの1.5倍化に伴う各種計算定数 */
         const BLOCK_HEIGHT = 168; 
@@ -787,78 +786,45 @@
             });
         }
 
-        // 公開Googleスプレッドシートから最新の運用状況（目撃情報）をCSVとしてロード。
-        // 日付判定（本日4:00 AM以降のみ）を実施し、リロードしても直近情報が反映され続けるよう設計。
+        // GAS経由でスプレッドシートから直近の登録状況（目撃情報）をリアルタイムに直接取得
+        // 4:00 AM以降の当日分の有効な編成名を受け取り、マスタデータと瞬時に紐付け
         async function loadFormations() {
+            if (!GAS_API_URL) return;
             try {
-                // キャッシュ回避用のタイムスタンプパラメータを付与してfetch
-                const res = await fetch(`${SPREADSHEET_CSV_URL}&t=${Date.now()}`);
-                if (!res.ok) throw new Error("スプレッドシートCSVのフェッチに失敗しました");
-                const csvText = await res.text();
-                const rawRows = parseCSV(csvText);
-
-                // 4:00 AM基準の今日（ダイヤ上の今日）の基準タイムスタンプを算出
-                let now = new Date();
-                let threshold = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0);
-                if (now.getHours() < 4) {
-                    threshold.setDate(threshold.getDate() - 1);
-                }
-                const thresholdTime = threshold.getTime();
-
-                // 運用番号ごとに最も新しい投稿（最新順）をマッピングする一時ストレージ
-                const tempFormations = {};
-
-                rawRows.forEach(row => {
-                    const dateStr = row['投稿日時'] || '';
-                    const unyoNo = row['運用番号'] || '';
-                    const formationName = (row['編成名'] || '').trim();
-                    const isSubStr = row['代走フラグ'] || '';
-
-                    if (!unyoNo || !dateStr) return;
-
-                    // 投稿日時 (例: 2026/07/14 19:36:14) をパース
-                    const dtParts = dateStr.split(/[\s/:]+/);
-                    if (dtParts.length < 5) return;
-                    const rowTime = new Date(
-                        parseInt(dtParts[0], 10),
-                        parseInt(dtParts[1], 10) - 1, // 月は0始まり
-                        parseInt(dtParts[2], 10),
-                        parseInt(dtParts[3], 10),
-                        parseInt(dtParts[4], 10),
-                        parseInt(dtParts[5] || '0', 10)
-                    ).getTime();
-
-                    // ダイヤ上の今日（4:00 AM以降）に記録されたもののみ採用
-                    if (rowTime >= thresholdTime) {
-                        // zaisen - formation_id.csv から該当する編成IDを引く
+                // action=get を指定してGAS経由で生データをノンブロッキングフェッチ
+                const url = `${GAS_API_URL}?action=get`;
+                const result = await fetchJSONP(url);
+                
+                if (result && result.status === "success" && Array.isArray(result.data)) {
+                    const tempFormations = {};
+                    
+                    result.data.forEach(item => {
+                        const unyoNo = item.unyoNo;
+                        const formationName = item.formationName;
+                        
+                        // マスタ (zaisen - formation_id.csv) から合致する編成IDを取得
                         let formationId = '';
                         const matchedForm = formationsList.find(f => f.name === formationName);
                         if (matchedForm) {
                             formationId = matchedForm.id;
                         } else {
-                            // マスタに合致しない編成でも、識別子として編成名そのものを割り振って表示を維持
+                            // マスタにない場合でも、フォールバックで編成名自体をIDに充てる
                             formationId = formationName;
                         }
-
-                        const isSubstitute = (isSubStr.toUpperCase() === 'TRUE');
-
-                        // 同一運用に対して複数投稿がある場合は、より新しい投稿日時を持つレコードを優先保存
-                        if (!tempFormations[unyoNo] || tempFormations[unyoNo].timestamp < rowTime) {
-                            tempFormations[unyoNo] = {
-                                formationId: formationId,
-                                formationName: formationName,
-                                isSubstitute: isSubstitute,
-                                timestamp: rowTime
-                            };
-                        }
-                    }
-                });
-
-                // グローバル保持用データを入れ替え
-                globalFormations = tempFormations;
-                console.log("[編成データ] スプレッドシートCSVから最新情報を復元完了:", globalFormations);
+                        
+                        tempFormations[unyoNo] = {
+                            formationId: formationId,
+                            formationName: formationName,
+                            isSubstitute: item.isSubstitute,
+                            timestamp: item.timestamp
+                        };
+                    });
+                    
+                    globalFormations = tempFormations;
+                    console.log("[編成データ] GASから最新情報をリアルタイム復元完了:", globalFormations);
+                }
             } catch (e) {
-                console.error("[編成データ] 読み込みに失敗しました。ローカルストレージ・模擬モードで継続します:", e);
+                console.error("[編成データ] 読み込みに失敗しました:", e);
             }
         }
 
@@ -1809,8 +1775,6 @@
                     } else {
                         timeDiv.innerText = String(item.minute).padStart(2, '0');
                     }
-
-                    // ★時刻のところにはアスタリスクを表示しない（以前のコード部分を削除）★
 
                     // 駅時刻表の「発車時刻の下」に表示する編成名要素
                     let formDiv = document.createElement('div');
