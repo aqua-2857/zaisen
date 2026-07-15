@@ -2022,38 +2022,45 @@
         }
 
         async function deleteFormationPost() {
-            // ★データセットから一意の運用IDを取得
-            const unyoId = document.getElementById('form-unyo-no').dataset.unyoId || '';
-            if (!unyoId) return;
-
-            const loader = document.getElementById('loading-screen');
-            if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
-
-            try {
-                // 重複防止のため、削除時もunyoIdを指定してGASに通信
-                const url = `${GAS_API_URL}?action=delete&unyoId=${encodeURIComponent(unyoId)}`;
-                
-                await fetchJSONP(url);
-                
-                // ★ ローカル上のマップからも「unyoId」をキーに抹消
-                delete globalFormations[unyoId];
-                updateTrainPositions();
-                closeFormationModal();
-                
-                setTimeout(async () => {
-                    await loadFormations();
-                    updateTrainPositions();
-                }, 1000);
-
-            } catch (e) {
-                console.error("[編成取消] エラー:", e);
-                delete globalFormations[unyoId];
-                updateTrainPositions();
-                closeFormationModal();
-            } finally {
-                if (loader) { loader.style.display = 'none'; }
-            }
+        // ★データセットから一意の運用IDを取得
+        const unyoId = document.getElementById('form-unyo-no').dataset.unyoId || '';
+        if (!unyoId) {
+            console.warn("[編成取消] 運用IDが見つかりません。");
+            return;
         }
+
+        const loader = document.getElementById('loading-screen');
+        if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
+
+        try {
+            // 修正：GAS側が処理しやすいようにunyoIdをパラメータとして付与
+            const url = `${GAS_API_URL}?action=delete&unyoId=${encodeURIComponent(unyoId)}`;
+            
+            // JSONPでリクエストを送信
+            const response = await fetchJSONP(url);
+            console.log("[編成取消] GASレスポンス:", response);
+            
+            // ★ ローカル上のマップからも「unyoId」をキーに抹消
+            delete globalFormations[unyoId];
+            updateTrainPositions();
+            closeFormationModal();
+            
+            // 少し待ってから最新状態をスプレッドシートから再ロード（復活しないことを確認）
+            setTimeout(async () => {
+                await loadFormations();
+                updateTrainPositions();
+            }, 1000);
+
+        } catch (e) {
+            console.error("[編成取消] エラー:", e);
+            // エラーが発生した場合も、ローカル上は一旦削除を試みる
+            delete globalFormations[unyoId];
+            updateTrainPositions();
+            closeFormationModal();
+        } finally {
+            if (loader) { loader.style.display = 'none'; }
+        }
+    }
     </script>
 </body>
 </html>
