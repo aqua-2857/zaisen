@@ -831,13 +831,28 @@
             const lines = cleanText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
             const headers = lines[0].split(',').map(h => h.trim().replace(/[\u200B-\u200D\uFEFF]/g, ''));
-            
             return lines.slice(1).map(line => {
-                const values = line.split(',');
+                // ダブルクォーテーション内のカンマを保護しながら分割するパース処理
+                const values = [];
+                let val = '';
+                let insideQuote = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        insideQuote = !insideQuote; // ダブルクォーテーションの開始・終了を切り替え
+                    } else if (char === ',' && !insideQuote) {
+                        values.push(val.trim());
+                        val = '';
+                    } else {
+                        val += char;
+                    }
+                }
+                values.push(val.trim());
+
                 const obj = {};
                 headers.forEach((header, index) => {
                     if (header) {
-                        obj[header] = values[index] ? values[index].trim() : '';
+                        obj[header] = values[index] !== undefined ? values[index] : '';
                     }
                 });
                 return obj;
