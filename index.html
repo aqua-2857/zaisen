@@ -559,9 +559,9 @@
             </div>
             <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:12px;">
                 <div style="font-size:0.95rem;">列車番号: <span id="form-train-no" style="font-weight:bold;"></span></div>
-                <div style="font-size:0.95rem;">運用番号: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
+                <div style="font-size:0.95rem;">対象運用: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
                 <label style="display:flex; flex-direction:column; gap:6px; font-weight:bold; font-size:0.9rem; margin-top:5px;">
-                    編成名または車両形式:
+                    編成を選択してください:
                     <select id="select-formation-id" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;">
                         <option value="">-- 編成を選択 --</option>
                     </select>
@@ -695,20 +695,17 @@
                 formationsList = [];
                 formationsMapById = {};
                 data.forEach(row => {
-                    // ★編成名（形式名）を優先取得。空でなければマスタとして登録
                     const name = (row['編成名'] || row['\ufeff編成名'] || '').trim();
                     if (name !== '') {
                         const item = {
                             name: name,
                             icon: (row['アイコン'] || '').trim(),
                             color: (row['カラー'] || '').trim(),
-                            // ★コンマ区切りの複数グループ対応（トリムして空白を除去）
                             normalGps: (row['通常運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
                             substituteGps: (row['代走運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
-                            notes: (row['編成特記事項'] || '').trim()
+                            notes: (row['編成特記事项'] || '').trim()
                         };
                         formationsList.push(item);
-                        // 後方互換性および一意判定用としてマップにも展開
                         formationsMapById[name] = item;
                     }
                 });
@@ -768,7 +765,6 @@
                         const formationName = item.formationName;
                         if (!unyoId) return;
                         
-                        // ★編成IDは使わず、編成名のみで記録・判別
                         tempFormations[unyoId] = {
                             formationName: formationName,
                             isSubstitute: item.isSubstitute,
@@ -789,7 +785,6 @@
             const post = globalFormations[unyoId];
             if (!post.formationName) return null; 
             
-            // ★現在の運用IDに対応する運用Gpを判定
             let unyoGp = 'unknown';
             const matchedTrain = globalTrains.find(t => t.unyoId === unyoId);
             if (matchedTrain) {
@@ -799,13 +794,11 @@
                 unyoGp = gpMatch ? gpMatch[1] : 'unknown';
             }
 
-            // ★同じ編成名でも、通常または代走グループに含まれている最適なマスタ要素を引き当てる
             let formObj = formationsList.find(f => 
                 f.name === post.formationName && 
                 (f.normalGps.includes(unyoGp) || f.substituteGps.includes(unyoGp))
             );
 
-            // 合致する運用Gpのものが見つからない場合のみ、編成名が一致する最初のものをフォールバック
             if (!formObj) {
                 formObj = formationsList.find(f => f.name === post.formationName);
             }
@@ -831,15 +824,16 @@
             const lines = cleanText.split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0) return [];
             const headers = lines[0].split(',').map(h => h.trim().replace(/[\u200B-\u200D\uFEFF]/g, ''));
+            
             return lines.slice(1).map(line => {
-                // ダブルクォーテーション内のカンマを保護しながら分割するパース処理
+                // ダブルクォーテーション内のカンマを保護しながら安全にパースするロジック
                 const values = [];
                 let val = '';
                 let insideQuote = false;
                 for (let i = 0; i < line.length; i++) {
                     const char = line[i];
                     if (char === '"') {
-                        insideQuote = !insideQuote; // ダブルクォーテーションの開始・終了を切り替え
+                        insideQuote = !insideQuote; 
                     } else if (char === ',' && !insideQuote) {
                         values.push(val.trim());
                         val = '';
@@ -1083,7 +1077,7 @@
                             let dotGroups = [];
                             let allRowTrains = [];
 
-                            for (let k = 1; k <= 80; k++) {
+                            for (let k = 1; k <= 30; k++) {
                                 const cell = row[`列車${k}`];
                                 if (!cell) continue;
 
@@ -1172,7 +1166,7 @@
                         id: "merged_" + gId,
                         unyoGp: matchedRule ? matchedRule.unyoGp : "unknown",
                         unyoNo: matchedRule ? matchedRule.unyoNo : "",
-                        unyoId: matchedRule ? matchedRule.unyoId : "", // ★パース時点で運用IDを正しく代入
+                        unyoId: matchedRule ? matchedRule.unyoId : "", 
                         components: [],
                         stops: {}
                     };
@@ -1303,10 +1297,8 @@
                     if (index < currentStations.length - 1) {
                         const nextY = (index + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
 
+                        // ic / oc に伴う駅間直線の遮断・短縮処理は行わず、中間の直線は常に真っ直ぐ全レングス描く
                         let mainD = `M ${lineX} ${nextY} L ${lineX} ${currentY}`;
-                        if (branches.includes('ic') || branches.includes('oc')) {
-                            mainD = `M ${lineX} ${currentY} L ${lineX} ${currentY + ROW_HALF_HEIGHT}`;
-                        }
 
                         const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                         mainPath.setAttribute('d', mainD);
@@ -1317,7 +1309,7 @@
                     }
 
                     branches.forEach((branch, bIdx) => {
-                        if (branch && branch !== 'ic' && branch !== 'oc') {
+                        if (branch) { // ic, oc の除外制限を撤廃して処理できるようにする
                             const branchRouteId = branchRouteIds[bIdx] || '';
                             const targetBranchName = getRouteNameById(branchRouteId);
                             const branchLineColor = getLineColorById(branchRouteId);
@@ -1328,6 +1320,7 @@
                             let textX = 0;
                             let textY = 0;
                             let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
+                            
                             if (branch === 'il') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
                                 textX = 20; textY = (currentY - ROW_HALF_HEIGHT) + 2; 
@@ -1349,6 +1342,28 @@
                                 textX = lineX + 40; textY = (currentY + ROW_HALF_HEIGHT) + 2; 
                                 zoneLeft = lineX; zoneTop = currentY + 15;
                                 zoneWidth = screenWidth - lineX; zoneHeight = 50;
+                            } else if (branch === 'ic') {
+                                // Inbound Center: 最上部の駅（index === 0）でのみ上に向かって真っ直ぐ伸ばす
+                                if (index === 0) {
+                                    branchD = `M ${lineX} ${currentY} L ${lineX} ${currentY - ROW_HALF_HEIGHT}`;
+                                    textX = lineX + 15; 
+                                    textY = currentY - (ROW_HALF_HEIGHT / 2);
+                                    zoneLeft = lineX - 100; 
+                                    zoneTop = currentY - ROW_HALF_HEIGHT;
+                                    zoneWidth = 200; 
+                                    zoneHeight = ROW_HALF_HEIGHT;
+                                }
+                            } else if (branch === 'oc') {
+                                // Outbound Center: 最下部の駅でのみ下に向かって真っ直ぐ伸ばす
+                                if (index === currentStations.length - 1) {
+                                    branchD = `M ${lineX} ${currentY} L ${lineX} ${currentY + ROW_HALF_HEIGHT}`;
+                                    textX = lineX + 15; 
+                                    textY = currentY + (ROW_HALF_HEIGHT / 2);
+                                    zoneLeft = lineX - 100; 
+                                    zoneTop = currentY;
+                                    zoneWidth = 200; 
+                                    zoneHeight = ROW_HALF_HEIGHT;
+                                }
                             }
 
                             if (branchD) {
@@ -1511,7 +1526,6 @@
             
             const displayNo = comp.trainNo; 
             
-            // ★ 一意な「unyoId」を利用して目撃情報を照合（編成IDは使用せず編成名基準）
             const postInfo = getUnyoPostInfo(train.unyoId);
             
             const label = document.createElement('div');
@@ -1722,7 +1736,6 @@
                     noDiv.className = 'min-cell-no';
                     noDiv.innerText = item.trainNo;
 
-                    // ★ 駅時刻表の路線・編成名統合判定も、編成IDではなく一意な運用ID(unyoId)に基づくものへ変更
                     const postInfo = getUnyoPostInfo(item.rawTrain.unyoId);
 
                     if (postInfo && postInfo.color) {
@@ -1819,7 +1832,6 @@
         function openTrainModal(train, trainNo) {
             document.getElementById('train-modal-no').innerText = trainNo;
             
-            // ★ 列車モーダルでも一意の「unyoId」で編成マスタを統合判定
             const postInfo = getUnyoPostInfo(train.unyoId);
             const headerEl = document.querySelector('#train-modal .modal-header');
             
@@ -1933,13 +1945,11 @@
             document.getElementById('form-train-no').innerText = trainNo;
             document.getElementById('form-unyo-no').innerText = unyoNo;
             
-            // 投稿・削除の主キーにするためにDOMのdatasetへ「unyoId」を保持
             document.getElementById('form-unyo-no').dataset.unyoId = unyoId || '';
             
             const selectEl = document.getElementById('select-formation-id');
             selectEl.innerHTML = '<option value="">-- 編成を選択 --</option>';
 
-            // ★ 複数運用Gp（コンマ区切り）が配列に含まれるかどうかでフィルター
             const normalFormations = formationsList.filter(form => {
                 return form.normalGps.includes(unyoGp);
             });
@@ -1948,7 +1958,6 @@
                 return form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
             });
 
-            // ★ 編成名（形式名）をプルダウンのvalueとして割り当て、投稿時もこれを使用
             normalFormations.forEach(form => {
                 const opt = document.createElement('option');
                 opt.value = form.name;
@@ -1963,7 +1972,6 @@
                 selectEl.appendChild(opt);
             });
 
-            // ★ 照合を「unyoId」基準でおこない、投稿済みの選択肢を編成名で復元
             const currentPost = globalFormations[unyoId];
             const deleteBtn = document.getElementById('btn-delete-post');
             
@@ -1983,17 +1991,15 @@
 
         async function submitFormation() {
             const unyoNo = document.getElementById('form-unyo-no').innerText;
-            // データセットから一意の運用IDを取得
             const unyoId = document.getElementById('form-unyo-no').dataset.unyoId || '';
             const selectEl = document.getElementById('select-formation-id');
-            const formationName = selectEl.value; // 編成名
+            const formationName = selectEl.value; 
 
             if (!formationName || !unyoId) {
                 alert("編成を選択してください。");
                 return;
             }
 
-            // 現在走っている運用IDから正しい運用Gpを判別
             let targetUnyoGp = '';
             const matchedTrain = globalTrains.find(t => t.unyoId === unyoId);
             if (matchedTrain) {
@@ -2003,7 +2009,6 @@
                 targetUnyoGp = gpMatch ? gpMatch[1] : 'unknown';
             }
 
-            // 同名回避：現在グループが含まれる最適なマスタ情報から代走判定を算出
             let formation = formationsList.find(f => 
                 f.name === formationName && 
                 (f.normalGps.includes(targetUnyoGp) || f.substituteGps.includes(targetUnyoGp))
@@ -2018,12 +2023,10 @@
             if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
 
             try {
-                // GASAPIにunyoIdと、編成IDを使わない編成名(formationName)を渡してJSONP送信
                 const url = `${GAS_API_URL}?action=post&unyoNo=${encodeURIComponent(unyoNo)}&unyoId=${encodeURIComponent(unyoId)}&formationName=${encodeURIComponent(formationName)}&isSubstitute=${isSub}`;
                 
                 await fetchJSONP(url);
                 
-                // ローカルの保持用マップも「unyoId」をキーに疑似更新
                 globalFormations[unyoId] = {
                     formationName: formationName,
                     isSubstitute: isSub,
@@ -2053,7 +2056,6 @@
         }
 
         async function deleteFormationPost() {
-            // データセットから一意の運用IDを取得
             const unyoId = document.getElementById('form-unyo-no').dataset.unyoId || '';
             if (!unyoId) return;
 
@@ -2061,12 +2063,10 @@
             if (loader) { loader.style.display = 'flex'; loader.style.opacity = '1'; }
 
             try {
-                // ★ 修正：一意な unyoId をパラメータとしてGASに送信し、競合なき削除を実行
                 const url = `${GAS_API_URL}?action=delete&unyoId=${encodeURIComponent(unyoId)}`;
                 
                 await fetchJSONP(url);
                 
-                // ローカル上のマップからも「unyoId」をキーに抹消
                 delete globalFormations[unyoId];
                 updateTrainPositions();
                 closeFormationModal();
