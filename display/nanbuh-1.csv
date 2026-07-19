@@ -1,6 +1,6 @@
-路線ID,駅ID,分岐方向,分岐路線,表示先
-jrejnh,ji08,,,
-jrejnh,jn53,,,
-jrejnh,jn52,,,
-jrejnh,jn51,,,
-,jn50,,,
+路線ID,駅ID,分岐方向,分岐路線,分岐表示先,乗換路線,乗換表示先
+jrejnh,ji08,,,,jreji1,tsurumi-1
+jrejnh,jn53,,,,,
+jrejnh,jn52,,,,,
+jrejnh,jn51,,,,,
+,jn50,,,,,
