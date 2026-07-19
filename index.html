@@ -1,3 +1,4 @@
+<!-- 在線2026/07/17 - 改訂版 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -63,7 +64,7 @@
             align-items: center;
             gap: 5px;
             cursor: pointer;
-            z-index: 200;
+            z-index: 300; /* メニュー(250)より前面 */
         }
         .menu-btn span {
             display: block;
@@ -84,12 +85,18 @@
             width: 250px;
             height: 100%;
             background: rgba(28, 28, 28, 0.95);
-            z-index: 150;
+            z-index: 250; /* オーバーレイより前面、メニューボタン(300)より背面 */
             transition: 0.3s;
             padding-top: 60px;
             box-shadow: -2px 0 10px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
         }
         .nav-menu.active { right: 0; }
+        .nav-menu-items-container {
+            flex: 1;
+            overflow-y: auto;
+        }
         .nav-menu-item {
             padding: 20px;
             color: white;
@@ -109,7 +116,7 @@
             height: 100%;
             background: rgba(0,0,0,0.5);
             display: none;
-            z-index: 140;
+            z-index: 240; /* メニュー本体(250)のすぐ後ろ */
         }
         .menu-overlay.active { display: block; }
 
@@ -253,6 +260,10 @@
             white-space: nowrap;
             line-height: 1.1;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 55px; /* 横方向の座標固定対応 */
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .train-icon {
@@ -274,6 +285,10 @@
             white-space: nowrap;
             line-height: 1.1;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 55px; /* 横方向の座標固定対応 */
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .branch-clickable-container {
@@ -358,12 +373,17 @@
             text-align: center;
             font-size: 1.25rem;
             font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         .modal-header-title-left {
             flex: 1;
             text-align: left;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: bold;
+            line-height: 1.2;
         }
         .modal-close-btn {
             background: none; border: none; color: white; font-size: 1.6rem; cursor: pointer; line-height: 1;
@@ -426,11 +446,16 @@
             flex: 1; display: flex; flex-wrap: wrap; gap: 10px 14px;
         }
         .min-cell {
-            display: flex; flex-direction: column; align-items: center; min-width: 25px;
+            display: flex; flex-direction: column; align-items: center; width: 60px; /* 横方向の等幅・座標固定対応 */
             cursor: pointer;
+            text-align: center;
         }
         .min-cell-no {
-            font-size: 8px; color: #777; line-height: 1; margin-bottom: 1px; font-weight: normal;
+            font-size: 8px; color: #777; line-height: 1.1; margin-bottom: 1px; font-weight: normal;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .min-cell-time {
             font-size: 0.95rem; font-weight: bold; color: #222; line-height: 1;
@@ -440,15 +465,38 @@
         }
 
         /* 列車時刻表固有スタイル */
-        .train-modal-meta {
+        .train-modal-meta-box {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             background: #f9f9f9;
             border: 1px solid #e2e2e2;
-            padding: 8px 12px;
-            border-radius: 4px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .train-modal-unyo-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-size: 0.9rem;
             font-weight: bold;
-            margin-bottom: 10px;
             color: #333;
+        }
+        .train-modal-formation-row {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            font-size: 0.95rem;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+        .train-modal-spec-notes {
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-top: 2px;
+            text-align: right;
+            width: 100%;
         }
         .train-timetable-row {
             display: flex;
@@ -475,6 +523,67 @@
             color: #999;
             font-weight: normal;
         }
+
+        /* 時刻シミュレータ配置 */
+        .time-simulator-widget {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: auto;
+        }
+        .time-display-bubble {
+            background-color: #465DAA;
+            color: white;
+            font-weight: bold;
+            padding: 6px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            font-size: 0.8rem;
+            line-height: 1.2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .time-icon-btn {
+            background-color: white;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 2px solid #ccc;
+        }
+        .time-icon-btn img {
+            width: 36px;
+            height: 36px;
+            object-fit: contain;
+        }
+
+        /* 運用投稿時の書き込みサジェストリスト */
+        .suggest-list-container {
+            border: 1px solid #ccc;
+            border-top: none;
+            max-height: 150px;
+            overflow-y: auto;
+            border-radius: 0 0 4px 4px;
+            background: white;
+        }
+        .suggest-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .suggest-item:hover {
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -484,7 +593,10 @@
     </div>
 
     <div class="header">
-        <button id="back-button" class="back-btn" onclick="showHomeScreen()">← 戻る</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button id="back-button" class="back-btn" onclick="showHomeScreen()">← 戻る</button>
+            <img id="transfer-icon" src="icon/transfer.png" style="display: none; width: 24px; height: 24px; object-fit: contain; cursor: pointer;" onclick="openTransferModal()">
+        </div>
         <span id="header-title">ホーム</span>
         <div class="menu-btn" onclick="toggleMenu()">
             <span></span>
@@ -494,10 +606,13 @@
     </div>
 
     <div id="nav-menu" class="nav-menu">
-        <div id="last-update" class="nav-menu-item" style="cursor: default; background: none; color: #ccc; font-size: 0.9rem;">
-            最終更新：取得中...
+        <div class="nav-menu-items-container">
+            <div class="nav-menu-item" onclick="pageReload()">リロード</div>
+            <div class="nav-menu-item" onclick="openSettingModal()">設定</div>
+            <div id="last-update" class="nav-menu-item" style="cursor: default; background: none; color: #ccc; font-size: 0.9rem;">
+                最終更新：取得中...
+            </div>
         </div>
-        <div class="nav-menu-item" onclick="pageReload()">リロード</div>
     </div>
     <div id="menu-overlay" class="menu-overlay" onclick="toggleMenu()"></div>
 
@@ -510,6 +625,18 @@
         <div id="train-layer" class="train-layer"></div>
     </div>
 
+    <!-- 時刻シミュレータウィジェット -->
+    <div id="time-sim-widget" class="time-simulator-widget" style="display: none;">
+        <div id="time-bubble-info" class="time-display-bubble" style="display: none;">
+            <div>2026/07/17(金)</div>
+            <div>12:00</div>
+        </div>
+        <div class="time-icon-btn" onclick="openTimeSimModal()">
+            <img src="icon/time.png" alt="時刻設定">
+        </div>
+    </div>
+
+    <!-- 時刻表モーダル -->
     <div id="timetable-modal" class="modal-overlay" style="display:none;" onclick="closeModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -534,23 +661,28 @@
         </div>
     </div>
 
+    <!-- 列車時刻表モーダル -->
     <div id="train-modal" class="modal-overlay" style="display:none;" onclick="closeTrainModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <span id="train-modal-no" class="modal-header-title-left">列車番号</span>
-                <button id="btn-post-from-train-modal" style="margin-right: 35px; padding: 6px 12px; background: white; color: #111; border: none; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer; display: none;">運用投稿</button>
+                <div id="train-modal-no-container" class="modal-header-title-left">
+                    <div id="train-modal-header-l1" style="font-weight: bold; font-size: 1.1rem;">列車番号</div>
+                    <div id="train-modal-header-l2" style="font-size: 0.85rem; font-weight: normal; opacity: 0.9;">列車名/種別</div>
+                </div>
+                <div id="train-modal-header-right" style="font-size: 0.8rem; font-weight: normal; opacity: 0.9; margin-right: 35px; text-align: right;">
+                    始発〜終着
+                </div>
                 <button class="modal-close-btn" onclick="closeTrainModal()">×</button>
             </div>
             <div class="modal-scroll-body">
-                <div id="train-modal-unyo" class="train-modal-meta" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="train-modal-unyo-text">運用番号: </span>
-                    <span id="train-modal-formation-text" style="font-weight: bold; font-size: 1rem;"></span>
-                </div>
+                <!-- 併結時、上下に並べて2枠設置可能なコンテナ -->
+                <div id="train-modal-meta-container"></div>
                 <div id="train-timetable-list" class="timetable-table"></div>
             </div>
         </div>
     </div>
 
+    <!-- 運用編成情報の投稿モーダル -->
     <div id="formation-modal" class="modal-overlay" style="display:none;" onclick="closeFormationModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
@@ -560,15 +692,73 @@
             <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:12px;">
                 <div style="font-size:0.95rem;">列車番号: <span id="form-train-no" style="font-weight:bold;"></span></div>
                 <div style="font-size:0.95rem;">対象運用: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
-                <label style="display:flex; flex-direction:column; gap:6px; font-weight:bold; font-size:0.9rem; margin-top:5px;">
-                    編成を選択してください:
-                    <select id="select-formation-id" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;">
-                        <option value="">-- 編成を選択 --</option>
-                    </select>
+                <label style="display:flex; flex-direction:column; gap:6px; font-weight:bold; font-size:0.9rem; margin-top:5px; position: relative;">
+                    編成を入力または選択してください:
+                    <input type="text" id="input-formation-search" placeholder="文字を入力して絞り込み..." style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;">
+                    <div id="suggest-list" class="suggest-list-container" style="display: none;"></div>
                 </label>
                 <div style="display:flex; gap: 8px; margin-top:8px;">
                     <button onclick="submitFormation()" style="flex: 1; padding:12px; background:var(--btn-color); color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer;">投稿する</button>
                     <button id="btn-delete-post" onclick="deleteFormationPost()" style="flex: 1; padding:12px; background:#FF3B30; color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer; display:none;">投稿を取り消す</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 乗換路線選択モーダル -->
+    <div id="transfer-modal" class="modal-overlay" style="display:none;" onclick="closeTransferModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-header-title-left">乗換路線の選択</span>
+                <button class="modal-close-btn" onclick="closeTransferModal()">×</button>
+            </div>
+            <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:10px;" id="transfer-list-container">
+                <!-- 路線一覧ボタンが動的に挿入されます -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定画面モーダル -->
+    <div id="setting-modal" class="modal-overlay" style="display:none;" onclick="closeSettingModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-header-title-left">アプリ設定</span>
+                <button class="modal-close-btn" onclick="closeSettingModal()">×</button>
+            </div>
+            <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:12px;">
+                    <span style="font-weight:bold; font-size:1rem;">日付・時刻の変更機能</span>
+                    <label style="position:relative; display:inline-block; width:50px; height:26px;">
+                        <input type="checkbox" id="setting-time-toggle" onchange="toggleTimeSettingConfig()" style="opacity:0; width:0; height:0;">
+                        <span style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background-color:#ccc; transition:.4s; border-radius:34px;" id="toggle-slider-back"></span>
+                    </label>
+                </div>
+                <div style="font-size:0.8rem; color:#666;">
+                    ※オンにすると、画面右下に日付・時刻を変更するためのボタンが表示されます。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 時刻設定変更モーダル -->
+    <div id="time-adjust-modal" class="modal-overlay" style="display:none;" onclick="closeTimeSimModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-header-title-left">日付・時刻の手動設定</span>
+                <button class="modal-close-btn" onclick="closeTimeSimModal()">×</button>
+            </div>
+            <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:12px;">
+                <label style="display:flex; flex-direction:column; gap:4px; font-weight:bold; font-size:0.9rem;">
+                    設定日付
+                    <input type="date" id="sim-date-input" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px;">
+                </label>
+                <label style="display:flex; flex-direction:column; gap:4px; font-weight:bold; font-size:0.9rem;">
+                    設定時刻
+                    <input type="time" id="sim-time-input" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px;">
+                </label>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button onclick="applySimulatedTime()" style="flex:1; padding:12px; background:var(--btn-color); color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer;">適用する</button>
+                    <button onclick="resetSimulatedTime()" style="flex:1; padding:12px; background:#888; color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer;">リセット</button>
                 </div>
             </div>
         </div>
@@ -588,13 +778,19 @@
 
         let formationsList = []; 
         let formationsMapById = {}; 
-        let globalFormations = {}; // ★主キーを「unyoId」に変更して目撃情報を管理
+        let globalFormations = {}; // unyoId基準で管理
 
         const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbw4Ts6829NpdcRcC9Vjf4xnWWhq120LDdRBRCAeTeO2PBN9ROjWc3yT7PCbPBPF1HI6fw/exec'; 
 
         const BLOCK_HEIGHT = 168; 
         const ROW_HALF_HEIGHT = 42; 
         
+        // 時刻シミュレーション用
+        let isSimTimeEnabled = true; // 設定トグル初期値
+        let simTimeActive = false; // カスタム時刻変更中かどうか
+        let simDateTime = null; // カスタム設定日時
+        let simTimerInterval = null;
+
         function getLineX() {
             const screenWidth = document.getElementById('zaisen-screen').clientWidth || window.innerWidth;
             return screenWidth * 0.65;
@@ -616,6 +812,141 @@
             }
         };
 
+        // ローカルストレージ設定の復元
+        function loadSettings() {
+            const storedToggle = localStorage.getItem('isSimTimeEnabled');
+            if (storedToggle !== null) {
+                isSimTimeEnabled = (storedToggle === 'true');
+            } else {
+                isSimTimeEnabled = true;
+            }
+            document.getElementById('setting-time-toggle').checked = isSimTimeEnabled;
+            updateTimeWidgetVisibility();
+        }
+
+        function saveSettings() {
+            localStorage.setItem('isSimTimeEnabled', isSimTimeEnabled);
+        }
+
+        function toggleTimeSettingConfig() {
+            isSimTimeEnabled = document.getElementById('setting-time-toggle').checked;
+            saveSettings();
+            updateTimeWidgetVisibility();
+        }
+
+        function updateTimeWidgetVisibility() {
+            const widget = document.getElementById('time-sim-widget');
+            const slider = document.getElementById('toggle-slider-back');
+            if (isSimTimeEnabled) {
+                widget.style.display = 'flex';
+                slider.style.backgroundColor = '#465DAA';
+            } else {
+                widget.style.display = 'none';
+                slider.style.backgroundColor = '#ccc';
+            }
+        }
+
+        function openSettingModal() {
+            toggleMenu();
+            document.getElementById('setting-modal').style.display = 'flex';
+        }
+
+        function closeSettingModal() {
+            document.getElementById('setting-modal').style.display = 'none';
+        }
+
+        function openTimeSimModal() {
+            const now = getSimulationTime();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+
+            document.getElementById('sim-date-input').value = `${yyyy}-${mm}-${dd}`;
+            document.getElementById('sim-time-input').value = `${hh}:${min}`;
+            document.getElementById('time-adjust-modal').style.display = 'flex';
+        }
+
+        function closeTimeSimModal() {
+            document.getElementById('time-adjust-modal').style.display = 'none';
+        }
+
+        function applySimulatedTime() {
+            const dVal = document.getElementById('sim-date-input').value;
+            const tVal = document.getElementById('sim-time-input').value;
+            if (!dVal || !tVal) return;
+
+            const [year, month, day] = dVal.split('-').map(Number);
+            const [hour, minute] = tVal.split(':').map(Number);
+
+            simDateTime = new Date(year, month - 1, day, hour, minute, 0);
+            simTimeActive = true;
+            
+            closeTimeSimModal();
+            updateSimulationDisplay();
+            
+            // 日付変更に伴うデータの再読み込み(リセット対応)
+            isTimetablesLoaded = false;
+            loadedTimetablePaths.clear();
+            loadTimetables().then(() => {
+                updateTrainPositions();
+                if (document.getElementById('timetable-modal').style.display === 'flex') {
+                    renderModalTimetable();
+                }
+            });
+        }
+
+        function resetSimulatedTime() {
+            simTimeActive = false;
+            simDateTime = null;
+            closeTimeSimModal();
+            updateSimulationDisplay();
+
+            isTimetablesLoaded = false;
+            loadedTimetablePaths.clear();
+            loadTimetables().then(() => {
+                updateTrainPositions();
+                if (document.getElementById('timetable-modal').style.display === 'flex') {
+                    renderModalTimetable();
+                }
+            });
+        }
+
+        function getSimulationTime() {
+            if (simTimeActive && simDateTime) {
+                return simDateTime;
+            }
+            return new Date();
+        }
+
+        function updateSimulationDisplay() {
+            const bubble = document.getElementById('time-bubble-info');
+            if (simTimeActive && simDateTime) {
+                bubble.style.display = 'flex';
+                const days = ['日', '月', '火', '水', '木', '金', '土'];
+                const yyyy = simDateTime.getFullYear();
+                const mm = String(simDateTime.getMonth() + 1).padStart(2, '0');
+                const dd = String(simDateTime.getDate()).padStart(2, '0');
+                const dayLabel = days[simDateTime.getDay()];
+                const hh = String(simDateTime.getHours()).padStart(2, '0');
+                const min = String(simDateTime.getMinutes()).padStart(2, '0');
+                
+                bubble.innerHTML = `<div>${yyyy}/${mm}/${dd}(${dayLabel})</div><div>${hh}:${min}</div>`;
+            } else {
+                bubble.style.display = 'none';
+            }
+        }
+
+        // 文字列トリム、前後の括弧・注釈等を無視して同一形式にまとめる
+        function truncateFormationName(name) {
+            if (!name) return '';
+            if (name.length > 7) {
+                return name.substring(0, 5) + '…';
+            }
+            return name;
+        }
+
         function timeToSeconds(timeStr) {
             if (!timeStr) return null;
             const clean = timeStr.replace(':', '').trim();
@@ -633,18 +964,25 @@
         }
 
         function syncUpdateLoop() {
-            updateTrainPositions();
-            const now = new Date();
-            const delay = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-            setTimeout(() => {
-                syncUpdateLoop();
-            }, delay);
+            if (!simTimeActive) {
+                updateTrainPositions();
+            } else {
+                // シミュレーション実行中、1分ごとに仮想時刻を進める
+                if (simDateTime) {
+                    simDateTime = new Date(simDateTime.getTime() + 1000);
+                    updateSimulationDisplay();
+                    updateTrainPositions();
+                }
+            }
+            setTimeout(syncUpdateLoop, 1000);
         }
 
         window.onload = async () => {
+            loadSettings();
             await fetchGitHubCommits();
             
-            let now = new Date();
+            const refDate = getSimulationTime();
+            let now = new Date(refDate);
             if (now.getHours() < 4) {
                 now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             }
@@ -703,7 +1041,7 @@
                             color: (row['カラー'] || '').trim(),
                             normalGps: (row['通常運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
                             substituteGps: (row['代走運用Gp'] || '').split(',').map(s => s.trim()).filter(s => s),
-                            notes: (row['編成特記事项'] || '').trim()
+                            notes: (row['編成特記事項'] || '').trim()
                         };
                         formationsList.push(item);
                         formationsMapById[name] = item;
@@ -754,6 +1092,15 @@
         async function loadFormations() {
             if (!GAS_API_URL) return;
             try {
+                // 日付フィルター: 指定の日(4時基準)に投稿されたもの
+                const refTime = getSimulationTime();
+                const limitStart = new Date(refTime);
+                if (limitStart.getHours() < 4) {
+                    limitStart.setDate(limitStart.getDate() - 1);
+                }
+                limitStart.setHours(4, 0, 0, 0);
+                const limitEnd = new Date(limitStart.getTime() + 24 * 60 * 60 * 1000);
+
                 const url = `${GAS_API_URL}?action=get`;
                 const result = await fetchJSONP(url);
                 
@@ -764,6 +1111,14 @@
                         const unyoId = item.unyoId || item.unyoNo;
                         const formationName = item.formationName;
                         if (!unyoId) return;
+
+                        // 手動設定日付・4時基準判定
+                        if (item.timestamp) {
+                            const postTime = new Date(item.timestamp);
+                            if (postTime < limitStart || postTime >= limitEnd) {
+                                return; // その日の投稿でないためスキップ
+                            }
+                        }
                         
                         tempFormations[unyoId] = {
                             formationName: formationName,
@@ -773,7 +1128,7 @@
                     });
                     
                     globalFormations = tempFormations;
-                    console.log("[編成データ] リアルタイム同期完了(unyoId基準):", globalFormations);
+                    console.log("[編成データ] 同期完了(unyoId基準・日付フィルター適用):", globalFormations);
                 }
             } catch (e) {
                 console.error("[編成データ] 読み込みに失敗しました:", e);
@@ -781,16 +1136,28 @@
         }
 
         function getUnyoPostInfo(unyoId) {
-            if (!unyoId || !globalFormations[unyoId]) return null;
+            if (!unyoId) return null;
+
+            // 「前」や「後」が付属しているケースをチェック
+            let cleanUnyoId = unyoId;
+            let suffix = "";
+            if (unyoId.endsWith("前")) {
+                cleanUnyoId = unyoId.slice(0, -1);
+                suffix = "前";
+            } else if (unyoId.endsWith("後")) {
+                cleanUnyoId = unyoId.slice(0, -1);
+                suffix = "後";
+            }
+
             const post = globalFormations[unyoId];
-            if (!post.formationName) return null; 
+            if (!post || !post.formationName) return null; 
             
             let unyoGp = 'unknown';
-            const matchedTrain = globalTrains.find(t => t.unyoId === unyoId);
+            const matchedTrain = globalTrains.find(t => t.unyoId === unyoId || t.unyoId === cleanUnyoId);
             if (matchedTrain) {
                 unyoGp = matchedTrain.unyoGp;
             } else {
-                const gpMatch = unyoId.match(/^([A-Za-z]+)/);
+                const gpMatch = cleanUnyoId.match(/^([A-Za-z]+)/);
                 unyoGp = gpMatch ? gpMatch[1] : 'unknown';
             }
 
@@ -808,14 +1175,16 @@
                     name: post.formationName,
                     icon: '',
                     color: '',
-                    isSubstitute: post.isSubstitute
+                    isSubstitute: post.isSubstitute,
+                    notes: ''
                 };
             }
             return {
                 name: formObj.name,
                 icon: formObj.icon,
                 color: formObj.color,
-                isSubstitute: post.isSubstitute
+                isSubstitute: post.isSubstitute,
+                notes: formObj.notes
             };
         }
 
@@ -826,7 +1195,6 @@
             const headers = lines[0].split(',').map(h => h.trim().replace(/[\u200B-\u200D\uFEFF]/g, ''));
             
             return lines.slice(1).map(line => {
-                // ダブルクォーテーション内のカンマを保護しながら安全にパースするロジック
                 const values = [];
                 let val = '';
                 let insideQuote = false;
@@ -972,6 +1340,7 @@
             document.getElementById('home-screen').style.display = 'flex';
             document.getElementById('zaisen-screen').style.display = 'none';
             document.getElementById('back-button').style.display = 'none';
+            document.getElementById('transfer-icon').style.display = 'none';
         }
 
         async function checkIsHolidayAPI(targetDate) {
@@ -1007,7 +1376,8 @@
         async function loadTimetables() {
             if (isTimetablesLoaded) return;
 
-            let now = new Date();
+            const refTime = getSimulationTime();
+            let now = new Date(refTime);
             if (now.getHours() < 4) {
                 now = new Date(now.getTime() - 24 * 60 * 60 * 1000);
             }
@@ -1026,7 +1396,12 @@
             let rawTrains = []; 
             let opRules = [];   
 
-            const routeIds = Object.keys(railroadMap);
+            // 改訂要件: zaisen - railroad_id.csvから路線系統名(currentSystem)と運用表IDがリンクした路線のみ読み取る
+            const routeIds = Object.keys(railroadMap).filter(rId => {
+                const master = railroadMap[rId];
+                return master && master['路線系統'] === currentSystem;
+            });
+
             for (const routeId of routeIds) {
                 const routeMaster = railroadMap[routeId];
                 if (!routeMaster) continue;
@@ -1183,6 +1558,44 @@
                 });
             });
 
+            // 運用表内の列車番号の連結・停車補間
+            // 運用表上で隣り合っており、かつ前列車の終着駅と次列車の始発駅が同じ場合
+            opRules.forEach(rule => {
+                for (let i = 0; i < rule.allTrains.length - 1; i++) {
+                    const tNo1 = rule.allTrains[i];
+                    const tNo2 = rule.allTrains[i+1];
+                    
+                    const mergedTrain1 = Object.values(mergedMap).find(m => m.components.some(c => c.trainNo === tNo1));
+                    const mergedTrain2 = Object.values(mergedMap).find(m => m.components.some(c => c.trainNo === tNo2));
+                    
+                    if (mergedTrain1 && mergedTrain2 && mergedTrain1.id !== mergedTrain2.id) {
+                        const comp1 = mergedTrain1.components.find(c => c.trainNo === tNo1);
+                        const comp2 = mergedTrain2.components.find(c => c.trainNo === tNo2);
+
+                        if (comp1 && comp2) {
+                            const stops1 = Object.keys(comp1.stops);
+                            const stops2 = Object.keys(comp2.stops);
+
+                            if (stops1.length > 0 && stops2.length > 0) {
+                                // 終着駅と始発駅の特定
+                                const t1Terminal = (comp1.dir === 'out') ? stops1[stops1.length - 1] : stops1[0];
+                                const t2Origin = (comp2.dir === 'out') ? stops2[0] : stops2[stops2.length - 1];
+
+                                if (t1Terminal === t2Origin) {
+                                    const t1Arr = comp1.stops[t1Terminal]['着'] || comp1.stops[t1Terminal]['発'];
+                                    const t2Dep = comp2.stops[t2Origin]['発'] || comp2.stops[t2Origin]['着'];
+
+                                    if (t1Arr && t2Dep) {
+                                        // 終着駅着 <= 時刻 < 始発駅発の間は該当駅に留まるよう、補完ストップを挿入
+                                        comp1.stops[t1Terminal]['補間終'] = t2Dep;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
             globalTrains = Object.values(mergedMap);
             isTimetablesLoaded = true;
         }
@@ -1192,8 +1605,23 @@
             const lines = cleanText.split('\n').filter(l => l.trim() !== '');
             if (lines.length < 6) return [];
 
+            // 列車番号・列車名・種別・始発駅・終着駅
             const trainNumbers = lines[0].split(',').slice(2);
-            const trains = trainNumbers.map(num => ({ trainNo: num.trim(), stops: {}, dir: dir }));
+            const trainNames = lines[1] ? lines[1].split(',').slice(2) : [];
+            const types = lines[2] ? lines[2].split(',').slice(2) : [];
+            const originStations = lines[3] ? lines[3].split(',').slice(2) : [];
+            const terminalStations = lines[4] ? lines[4].split(',').slice(2) : [];
+
+            const trains = trainNumbers.map((num, i) => ({
+                trainNo: num.trim(),
+                trainName: (trainNames[i] || '').trim(),
+                type: (types[i] || '').trim(),
+                originStation: (originStations[i] || '').trim(),
+                terminalStation: (terminalStations[i] || '').trim(),
+                stops: {},
+                dir: dir
+            }));
+
             for (let i = 5; i < lines.length; i++) {
                 const cols = lines[i].split(',').map(c => c.trim());
                 if (cols.length < 3) continue;
@@ -1249,11 +1677,25 @@
                 svgLayer.setAttribute('height', totalHeight);
                 svgLayer.setAttribute('width', screenWidth);
                 svgLayer.setAttribute('viewBox', `0 0 ${screenWidth} ${totalHeight}`);
-                
+
+                // 乗換表示アイコン用の制御: display内の「乗換路線」列に情報があるか確認
+                let hasTransfer = false;
+                let activeTransferRouteId = '';
+                let activeTransferSheet = '';
+
                 currentStations.forEach((row, index) => {
                     const stationId = row['駅ID'];
                     if (!stationId) return;
                     const stationName = stationsMap[stationId] || stationId;
+
+                    // 乗換路線の確認 (列名マッピングのアップデート対応)
+                    const transferRouteId = row['乗換路線'];
+                    const transferSheet = row['乗換表示先'];
+                    if (transferRouteId && transferSheet) {
+                        hasTransfer = true;
+                        activeTransferRouteId = transferRouteId;
+                        activeTransferSheet = transferSheet;
+                    }
 
                     const blockDiv = document.createElement('div');
                     blockDiv.className = 'station-block';
@@ -1292,12 +1734,11 @@
 
                     const branches = (row['分岐方向'] || '').split(',').map(s => s.trim()).filter(s => s);
                     const branchRouteIds = (row['分岐路線'] || '').split(',').map(s => s.trim());
-                    const branchDisplayDests = (row['表示先'] || '').split(',').map(s => s.trim());
+                    // 修正要件: displayの各csv「表示先」列名変更→「分岐表示先」
+                    const branchDisplayDests = (row['分岐表示先'] || row['表示先'] || '').split(',').map(s => s.trim());
 
                     if (index < currentStations.length - 1) {
                         const nextY = (index + 1) * BLOCK_HEIGHT + ROW_HALF_HEIGHT;
-
-                        // ic / oc に伴う駅間直線の遮断・短縮処理は行わず、中間の直線は常に真っ直ぐ全レングス描く
                         let mainD = `M ${lineX} ${nextY} L ${lineX} ${currentY}`;
 
                         const mainPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -1309,7 +1750,7 @@
                     }
 
                     branches.forEach((branch, bIdx) => {
-                        if (branch) { // ic, oc の除外制限を撤廃して処理できるようにする
+                        if (branch) {
                             const branchRouteId = branchRouteIds[bIdx] || '';
                             const targetBranchName = getRouteNameById(branchRouteId);
                             const branchLineColor = getLineColorById(branchRouteId);
@@ -1320,6 +1761,7 @@
                             let textX = 0;
                             let textY = 0;
                             let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
+                            let isCenterBranch = (branch === 'ic' || branch === 'oc');
                             
                             if (branch === 'il') {
                                 branchD = `M ${lineX} ${currentY} Q ${lineX} ${currentY - ROW_HALF_HEIGHT}, ${lineX - ROW_HALF_HEIGHT} ${currentY - ROW_HALF_HEIGHT} L 0 ${currentY - ROW_HALF_HEIGHT}`;
@@ -1343,10 +1785,10 @@
                                 zoneLeft = lineX; zoneTop = currentY + 15;
                                 zoneWidth = screenWidth - lineX; zoneHeight = 50;
                             } else if (branch === 'ic') {
-                                // Inbound Center: 最上部の駅（index === 0）でのみ上に向かって真っ直ぐ伸ばす
                                 if (index === 0) {
                                     branchD = `M ${lineX} ${currentY} L ${lineX} ${currentY - ROW_HALF_HEIGHT}`;
-                                    textX = lineX + 15; 
+                                    // 線の左側に表示
+                                    textX = lineX - 100; 
                                     textY = currentY - (ROW_HALF_HEIGHT / 2);
                                     zoneLeft = lineX - 100; 
                                     zoneTop = currentY - ROW_HALF_HEIGHT;
@@ -1354,10 +1796,10 @@
                                     zoneHeight = ROW_HALF_HEIGHT;
                                 }
                             } else if (branch === 'oc') {
-                                // Outbound Center: 最下部の駅でのみ下に向かって真っ直ぐ伸ばす
                                 if (index === currentStations.length - 1) {
                                     branchD = `M ${lineX} ${currentY} L ${lineX} ${currentY + ROW_HALF_HEIGHT}`;
-                                    textX = lineX + 15; 
+                                    // 線の左側に表示
+                                    textX = lineX - 100; 
                                     textY = currentY + (ROW_HALF_HEIGHT / 2);
                                     zoneLeft = lineX - 100; 
                                     zoneTop = currentY;
@@ -1377,7 +1819,14 @@
                                     const textSvg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                                     textSvg.setAttribute('x', textX);
                                     textSvg.setAttribute('y', (textY - 1).toString());
-                                    textSvg.setAttribute('fill', '#FFFFFF');
+                                    
+                                    // ic/oc の場合は駅名と同じ色(#333333)にする
+                                    if (isCenterBranch) {
+                                        textSvg.setAttribute('fill', '#333333');
+                                    } else {
+                                        textSvg.setAttribute('fill', '#FFFFFF');
+                                    }
+                                    
                                     textSvg.setAttribute('font-size', '14px');
                                     textSvg.setAttribute('font-weight', 'bold');
                                     textSvg.setAttribute('dominant-baseline', 'central');
@@ -1394,8 +1843,10 @@
                                     clickZone.style.height = `${zoneHeight}px`;
                                     clickZone.onclick = (e) => {
                                         e.stopPropagation();
-                                        activeLayouts[currentSystem] = `display/${displayDest}.csv`;
-                                        loadZaisen(currentSystem, stationId); 
+                                        // 系統（路線系統名）が変更される場合に対応
+                                        const nextSystem = railroadMap[branchRouteId] ? railroadMap[branchRouteId]['路線系統'] : currentSystem;
+                                        activeLayouts[nextSystem] = `display/${displayDest}.csv`;
+                                        loadZaisen(nextSystem, stationId); 
                                     };
                                     clickableLayer.appendChild(clickZone);
                                 }
@@ -1413,10 +1864,64 @@
                     svgLayer.appendChild(stationDot);
                 });
 
+                // 乗換アイコン表示制御
+                const transIcon = document.getElementById('transfer-icon');
+                if (hasTransfer) {
+                    transIcon.style.display = 'block';
+                    transIcon.dataset.transferRouteId = activeTransferRouteId;
+                    transIcon.dataset.transferSheet = activeTransferSheet;
+                } else {
+                    transIcon.style.display = 'none';
+                }
+
                 updateTrainPositions();
             } catch(e) {
                 console.error("レイアウトファイルの読み込みに失敗しました:", e.message);
             }
+        }
+
+        function openTransferModal() {
+            const transIcon = document.getElementById('transfer-icon');
+            const targetRouteIds = (transIcon.dataset.transferRouteId || '').split(',').map(s => s.trim());
+            const targetSheets = (transIcon.dataset.transferSheet || '').split(',').map(s => s.trim());
+
+            const container = document.getElementById('transfer-list-container');
+            container.innerHTML = '';
+
+            targetRouteIds.forEach((routeId, idx) => {
+                const sheetName = targetSheets[idx];
+                if (!routeId || !sheetName) return;
+
+                const rMaster = railroadMap[routeId];
+                const rName = rMaster ? rMaster['路線名'] : routeId;
+                const sysId = rMaster ? rMaster['路線系統'] : currentSystem;
+
+                const btn = document.createElement('button');
+                btn.style.cssText = `
+                    padding: 12px;
+                    background-color: var(--btn-color);
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 1rem;
+                    font-weight: bold;
+                    cursor: pointer;
+                    text-align: center;
+                `;
+                btn.innerText = rName;
+                btn.onclick = () => {
+                    closeTransferModal();
+                    activeLayouts[sysId] = `display/${sheetName}.csv`;
+                    loadZaisen(sysId);
+                };
+                container.appendChild(btn);
+            });
+
+            document.getElementById('transfer-modal').style.display = 'flex';
+        }
+
+        function closeTransferModal() {
+            document.getElementById('transfer-modal').style.display = 'none';
         }
 
         function updateTrainPositions() {
@@ -1425,10 +1930,10 @@
             if (!trainLayer) return;
             trainLayer.innerHTML = '';
 
-            const now = new Date();
-            let h = now.getHours();
-            const m = now.getMinutes();
-            const s = now.getSeconds();
+            const refTime = getSimulationTime();
+            let h = refTime.getHours();
+            const m = refTime.getMinutes();
+            const s = refTime.getSeconds();
             
             if (h < 4) {
                 h += 24;
@@ -1458,6 +1963,8 @@
 
                         let arr = timeToSeconds(stop['着']);
                         let dep = timeToSeconds(stop['発']);
+                        let compDep = timeToSeconds(stop['補間終']);
+
                         if (arr === null && dep !== null) arr = dep;
                         if (dep === null && arr !== null) dep = arr;
 
@@ -1466,7 +1973,7 @@
                                 idx: item.idx,
                                 stName: stName,
                                 arrSec: arr,
-                                depSec: dep,
+                                depSec: compDep !== null ? compDep : dep, // 補間考慮
                                 y: item.idx * BLOCK_HEIGHT + ROW_HALF_HEIGHT
                             });
                         }
@@ -1520,26 +2027,50 @@
             });
         }
 
+        // 前後併結・併合判別を含むレンダリング
         function renderTrainIcon(train, comp, yPos, dir, lineX, stName, index = 0) {
             const container = document.createElement('div');
             container.className = 'train-container';
             
-            const displayNo = comp.trainNo; 
-            
-            const postInfo = getUnyoPostInfo(train.unyoId);
+            let displayNo = comp.trainNo; 
+
+            // 「前」・「後」併結チェック
+            let isLinked = false;
+            let displayNoClean = displayNo;
+            let partnerUnyoId = "";
+            let unyoIdFront = train.unyoId;
+            let unyoIdBack = "";
+
+            if (train.unyoId.endsWith("前")) {
+                isLinked = true;
+                displayNoClean = displayNo.replace("前", "");
+                partnerUnyoId = train.unyoId.replace("前", "後");
+                unyoIdFront = train.unyoId;
+                unyoIdBack = partnerUnyoId;
+            } else if (train.unyoId.endsWith("後")) {
+                // 「後」は「前」とペアで一緒に描画されるため単体での描画をスキップ
+                isLinked = true;
+                const frontExists = globalTrains.some(t => t.unyoId === train.unyoId.replace("後", "前"));
+                if (frontExists) return; // 「前」側で統合処理を行うためスキップ
+            }
+
+            const postInfoFront = getUnyoPostInfo(unyoIdFront);
+            const postInfoBack = unyoIdBack ? getUnyoPostInfo(unyoIdBack) : null;
             
             const label = document.createElement('div');
             label.className = 'train-no-label';
-            label.innerText = displayNo;
-            if (postInfo && postInfo.color) {
-                label.style.color = postInfo.color;
+            label.innerText = displayNoClean;
+
+            // 表示する色は進行方向前側の車両に設定された色を使う
+            if (postInfoFront && postInfoFront.color) {
+                label.style.color = postInfoFront.color;
             }
 
             const icon = document.createElement('img');
             icon.className = 'train-icon';
 
-            if (postInfo && postInfo.icon) {
-                icon.src = `icon/${postInfo.icon}.png`;
+            if (postInfoFront && postInfoFront.icon) {
+                icon.src = `icon/${postInfoFront.icon}.png`;
             } else {
                 icon.src = `icon/${train.unyoGp}.png`;
             }
@@ -1552,12 +2083,28 @@
             container.appendChild(label);
             container.appendChild(icon);
 
-            if (postInfo && postInfo.name) {
+            // 編成ラベルの設定
+            let labelText = "";
+            let colorToUse = postInfoFront ? postInfoFront.color : "";
+
+            if (isLinked) {
+                const nameF = postInfoFront ? postInfoFront.name : "未定";
+                const nameB = postInfoBack ? postInfoBack.name : "未定";
+                labelText = nameF + "+" + nameB;
+            } else if (postInfoFront && postInfoFront.name) {
+                labelText = postInfoFront.name;
+            }
+
+            if (labelText) {
                 const formLabel = document.createElement('div');
                 formLabel.className = 'train-formation-label'; 
-                formLabel.innerText = postInfo.name;
+                formLabel.innerText = truncateFormationName(labelText);
                 
-                if (postInfo.isSubstitute) {
+                if (colorToUse) {
+                    formLabel.style.color = colorToUse;
+                }
+
+                if (postInfoFront && postInfoFront.isSubstitute) {
                     const ast = document.createElement('span');
                     ast.style.cssText = `
                         font-size: 8px;
@@ -1732,20 +2279,43 @@
                         openTrainModal(item.rawTrain, item.trainNo);
                     };
 
+                    let displayNoClean = item.trainNo;
+                    let isLinked = false;
+                    let partnerUnyoId = "";
+                    let unyoIdFront = item.rawTrain.unyoId;
+                    let unyoIdBack = "";
+
+                    if (item.rawTrain.unyoId.endsWith("前")) {
+                        isLinked = true;
+                        displayNoClean = item.trainNo.replace("前", "");
+                        partnerUnyoId = item.rawTrain.unyoId.replace("前", "後");
+                        unyoIdFront = item.rawTrain.unyoId;
+                        unyoIdBack = partnerUnyoId;
+                    } else if (item.rawTrain.unyoId.endsWith("後")) {
+                        // 「前」側で一括して描画するため重複防止
+                        const frontExists = records.some(r => r.rawTrain.unyoId === item.rawTrain.unyoId.replace("後", "前") && r.minute === item.minute);
+                        if (frontExists) return;
+                        isLinked = true;
+                        displayNoClean = item.trainNo.replace("後", "");
+                        unyoIdFront = item.rawTrain.unyoId.replace("後", "前");
+                        unyoIdBack = item.rawTrain.unyoId;
+                    }
+
                     let noDiv = document.createElement('div');
                     noDiv.className = 'min-cell-no';
-                    noDiv.innerText = item.trainNo;
+                    noDiv.innerText = displayNoClean;
 
-                    const postInfo = getUnyoPostInfo(item.rawTrain.unyoId);
+                    const postInfoFront = getUnyoPostInfo(unyoIdFront);
+                    const postInfoBack = unyoIdBack ? getUnyoPostInfo(unyoIdBack) : null;
 
-                    if (postInfo && postInfo.color) {
-                        noDiv.style.color = postInfo.color;
+                    if (postInfoFront && postInfoFront.color) {
+                        noDiv.style.color = postInfoFront.color;
                     }
 
                     let timeDiv = document.createElement('div');
                     timeDiv.className = 'min-cell-time';
-                    if (postInfo && postInfo.color) {
-                        timeDiv.style.color = postInfo.color;
+                    if (postInfoFront && postInfoFront.color) {
+                        timeDiv.style.color = postInfoFront.color;
                     }
 
                     if (item.isPassing) {
@@ -1760,12 +2330,21 @@
                     formDiv.style.marginTop = '2px';
                     formDiv.style.position = 'relative';
                     
-                    if (postInfo && postInfo.name) {
-                        formDiv.innerText = postInfo.name;
-                        if (postInfo.color) {
-                            formDiv.style.color = postInfo.color;
+                    let labelText = "";
+                    if (isLinked) {
+                        const nameF = postInfoFront ? postInfoFront.name : "未定";
+                        const nameB = postInfoBack ? postInfoBack.name : "未定";
+                        labelText = nameF + "+" + nameB;
+                    } else if (postInfoFront && postInfoFront.name) {
+                        labelText = postInfoFront.name;
+                    }
+
+                    if (labelText) {
+                        formDiv.innerText = truncateFormationName(labelText);
+                        if (postInfoFront && postInfoFront.color) {
+                            formDiv.style.color = postInfoFront.color;
                         }
-                        if (postInfo.isSubstitute) {
+                        if (postInfoFront && postInfoFront.isSubstitute) {
                             formDiv.innerHTML = formDiv.innerHTML + '<span style="font-size: 8px; font-weight: bold; color: red; position: absolute; top: -1px; left: 100%; line-height: 1;">*</span>';
                         }
                     } else {
@@ -1830,38 +2409,123 @@
         }
 
         function openTrainModal(train, trainNo) {
-            document.getElementById('train-modal-no').innerText = trainNo;
+            // 前後併結判定
+            let isLinked = false;
+            let partnerUnyoId = "";
+            let unyoIdFront = train.unyoId;
+            let unyoIdBack = "";
+
+            if (train.unyoId.endsWith("前")) {
+                isLinked = true;
+                partnerUnyoId = train.unyoId.replace("前", "後");
+                unyoIdFront = train.unyoId;
+                unyoIdBack = partnerUnyoId;
+            } else if (train.unyoId.endsWith("後")) {
+                isLinked = true;
+                partnerUnyoId = train.unyoId.replace("後", "前");
+                unyoIdFront = partnerUnyoId;
+                unyoIdBack = train.unyoId;
+            }
+
+            const postInfoFront = getUnyoPostInfo(unyoIdFront);
+            const postInfoBack = unyoIdBack ? getUnyoPostInfo(unyoIdBack) : null;
+
+            // 時刻表データの統合と始発〜終着駅の連結
+            const comp = train.components.find(c => c.trainNo === trainNo) || train.components[0];
             
-            const postInfo = getUnyoPostInfo(train.unyoId);
+            // 列車時刻表ヘッダーの2行化
+            document.getElementById('train-modal-header-l1').innerText = trainNo;
+            document.getElementById('train-modal-header-l2').innerText = comp.trainName || comp.type || '普通';
+
+            // 始発駅〜終着駅のドッキング表示
+            let finalOrigin = comp.originStation || '';
+            let finalTerminal = comp.terminalStation || '';
+
+            // 複数csvマージ時の始発・終着の端点検出
+            if (train.components.length > 1) {
+                let minTime = Infinity;
+                let maxTime = -Infinity;
+                train.components.forEach(c => {
+                    Object.keys(c.stops).forEach(st => {
+                        const stTimeDep = timeToSeconds(c.stops[st]['発']);
+                        const stTimeArr = timeToSeconds(c.stops[st]['着']);
+                        if (stTimeDep !== null) {
+                            if (stTimeDep < minTime) { minTime = stTimeDep; finalOrigin = c.originStation || st; }
+                            if (stTimeDep > maxTime) { maxTime = stTimeDep; finalTerminal = c.terminalStation || st; }
+                        }
+                        if (stTimeArr !== null) {
+                            if (stTimeArr < minTime) { minTime = stTimeArr; finalOrigin = c.originStation || st; }
+                            if (stTimeArr > maxTime) { maxTime = stTimeArr; finalTerminal = c.terminalStation || st; }
+                        }
+                    });
+                });
+            }
+            document.getElementById('train-modal-header-right').innerText = `${finalOrigin} 〜 ${finalTerminal}`;
+
             const headerEl = document.querySelector('#train-modal .modal-header');
-            
-            if (postInfo && postInfo.color) {
-                headerEl.style.backgroundColor = postInfo.color;
+            if (postInfoFront && postInfoFront.color) {
+                headerEl.style.backgroundColor = postInfoFront.color;
             } else {
                 headerEl.style.backgroundColor = 'var(--header-bg)';
             }
 
-            document.getElementById('train-modal-unyo-text').innerText = `運用番号: ${train.unyoNo || 'なし'}`;
+            // メタデータエリア（併結時は上下に並べて2枠作成、それぞれに運用・編成名、個別投稿ボタンを配置）
+            const metaContainer = document.getElementById('train-modal-meta-container');
+            metaContainer.innerHTML = '';
 
-            const formTextEl = document.getElementById('train-modal-formation-text');
-            if (postInfo && postInfo.name) {
-                formTextEl.innerText = postInfo.name + (postInfo.isSubstitute ? ' *' : '');
-                if (postInfo.color) {
-                    formTextEl.style.color = postInfo.color;
-                }
-            } else {
-                formTextEl.innerText = '';
-            }
+            function createMetaBox(unyoId, title, pInfo, isSubUnyo) {
+                const targetTrain = globalTrains.find(t => t.unyoId === unyoId) || train;
+                const cleanUnyoNo = targetTrain.unyoNo || unyoId;
 
-            const postBtn = document.getElementById('btn-post-from-train-modal');
-            if (train.unyoNo) {
-                postBtn.style.display = 'block';
+                const box = document.createElement('div');
+                box.className = 'train-modal-meta-box';
+
+                const row1 = document.createElement('div');
+                row1.className = 'train-modal-unyo-row';
+                row1.innerHTML = `<span>${title}: ${cleanUnyoNo}</span>`;
+
+                const postBtn = document.createElement('button');
+                postBtn.style.cssText = `
+                    padding: 6px 12px; background: var(--btn-color); color: white; border: none; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer;
+                `;
+                postBtn.innerText = '運用投稿';
                 postBtn.onclick = () => {
                     closeTrainModal();
-                    openFormationModal(train.unyoNo, trainNo, train.unyoGp, train.unyoId);
+                    openFormationModal(cleanUnyoNo, trainNo, targetTrain.unyoGp, unyoId);
                 };
+                row1.appendChild(postBtn);
+                box.appendChild(row1);
+
+                // 編成名＋特記事項の表示
+                const row2 = document.createElement('div');
+                row2.className = 'train-modal-formation-row';
+                if (pInfo && pInfo.color) {
+                    row2.style.color = pInfo.color;
+                }
+
+                const nameSpan = document.createElement('span');
+                nameSpan.innerText = pInfo ? (pInfo.name + (pInfo.isSubstitute ? ' *' : '')) : '未定';
+                row2.appendChild(nameSpan);
+
+                // 編成特記事項表示（右揃え、同じ色、枠をはみ出ない）
+                if (pInfo && pInfo.notes) {
+                    const notesSpan = document.createElement('div');
+                    notesSpan.className = 'train-modal-spec-notes';
+                    notesSpan.innerText = pInfo.notes;
+                    row2.appendChild(notesSpan);
+                }
+
+                box.appendChild(row2);
+                metaContainer.appendChild(box);
+            }
+
+            if (isLinked) {
+                createMetaBox(unyoIdFront, "前側運用", postInfoFront, false);
+                if (unyoIdBack) {
+                    createMetaBox(unyoIdBack, "後ろ側運用", postInfoBack, true);
+                }
             } else {
-                postBtn.style.display = 'none';
+                createMetaBox(train.unyoId, "運用番号", postInfoFront, false);
             }
 
             const listContainer = document.getElementById('train-timetable-list');
@@ -1873,9 +2537,7 @@
                 if (name) stIdxMap[name] = idx;
             });
 
-            const comp = train.components.find(c => c.trainNo === trainNo);
             const isUp = comp && comp.dir === 'in';
-
             let stationsToRender = [...currentStations];
             if (isUp) {
                 stationsToRender.reverse(); 
@@ -1944,43 +2606,71 @@
         function openFormationModal(unyoNo, trainNo, unyoGp, unyoId) {
             document.getElementById('form-train-no').innerText = trainNo;
             document.getElementById('form-unyo-no').innerText = unyoNo;
-            
             document.getElementById('form-unyo-no').dataset.unyoId = unyoId || '';
             
-            const selectEl = document.getElementById('select-formation-id');
-            selectEl.innerHTML = '<option value="">-- 編成を選択 --</option>';
-
-            const normalFormations = formationsList.filter(form => {
-                return form.normalGps.includes(unyoGp);
-            });
-
-            const substituteFormations = formationsList.filter(form => {
-                return form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
-            });
-
-            normalFormations.forEach(form => {
-                const opt = document.createElement('option');
-                opt.value = form.name;
-                opt.innerText = form.name;
-                selectEl.appendChild(opt);
-            });
-
-            substituteFormations.forEach(form => {
-                const opt = document.createElement('option');
-                opt.value = form.name;
-                opt.innerText = `${form.name} [代走]`;
-                selectEl.appendChild(opt);
-            });
-
-            const currentPost = globalFormations[unyoId];
-            const deleteBtn = document.getElementById('btn-delete-post');
+            const searchInput = document.getElementById('input-formation-search');
+            searchInput.value = '';
             
-            if (currentPost) {
-                selectEl.value = currentPost.formationName;
-                deleteBtn.style.display = 'block';
+            // 投稿済みのものがあれば初期入力にセット
+            const currentPost = globalFormations[unyoId];
+            if (currentPost && currentPost.formationName) {
+                searchInput.value = currentPost.formationName;
+                document.getElementById('btn-delete-post').style.display = 'block';
             } else {
-                deleteBtn.style.display = 'none';
+                document.getElementById('btn-delete-post').style.display = 'none';
             }
+
+            // インクリメンタルなサジェストボックス制御
+            const suggestContainer = document.getElementById('suggest-list');
+            suggestContainer.innerHTML = '';
+            suggestContainer.style.display = 'none';
+
+            function updateSuggest(query) {
+                suggestContainer.innerHTML = '';
+                const q = query.trim().toLowerCase();
+
+                // 絞り込み条件（運用Gpの一致や文字列マッチ）
+                const matched = formationsList.filter(form => {
+                    const nameMatch = form.name.toLowerCase().includes(q);
+                    const isNormal = form.normalGps.includes(unyoGp);
+                    const isSub = form.substituteGps.includes(unyoGp);
+                    return (q === '' && (isNormal || isSub)) || (q !== '' && nameMatch);
+                });
+
+                if (matched.length === 0) {
+                    suggestContainer.style.display = 'none';
+                    return;
+                }
+
+                matched.forEach(form => {
+                    const isSub = form.substituteGps.includes(unyoGp) && !form.normalGps.includes(unyoGp);
+                    const div = document.createElement('div');
+                    div.className = 'suggest-item';
+                    div.innerText = isSub ? `${form.name} [代走]` : form.name;
+                    div.onclick = () => {
+                        searchInput.value = form.name;
+                        suggestContainer.style.display = 'none';
+                    };
+                    suggestContainer.appendChild(div);
+                });
+                suggestContainer.style.display = 'block';
+            }
+
+            // イベントバインド
+            searchInput.oninput = (e) => {
+                updateSuggest(e.target.value);
+            };
+            searchInput.onclick = () => {
+                updateSuggest(searchInput.value);
+            };
+
+            // 閉じる時にサジェストを隠すための調整
+            document.addEventListener('click', function hideSuggest(e) {
+                if (!e.target.closest('#input-formation-search') && !e.target.closest('#suggest-list')) {
+                    suggestContainer.style.display = 'none';
+                    document.removeEventListener('click', hideSuggest);
+                }
+            });
 
             document.getElementById('formation-modal').style.display = 'flex';
         }
@@ -1992,11 +2682,10 @@
         async function submitFormation() {
             const unyoNo = document.getElementById('form-unyo-no').innerText;
             const unyoId = document.getElementById('form-unyo-no').dataset.unyoId || '';
-            const selectEl = document.getElementById('select-formation-id');
-            const formationName = selectEl.value; 
+            const formationName = document.getElementById('input-formation-search').value.trim(); 
 
             if (!formationName || !unyoId) {
-                alert("編成を選択してください。");
+                alert("編成を入力または選択してください。");
                 return;
             }
 
@@ -2088,3 +2777,4 @@
     </script>
 </body>
 </html>
+
