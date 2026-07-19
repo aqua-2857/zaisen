@@ -1058,7 +1058,7 @@
                 const callbackName = 'jsonp_cb_' + Math.round(100000 * Math.random());
                 
                 const timer = setTimeout(() => {
-                    delete window[callbackName];
+                    delete window[window.callbackName];
                     const s = document.getElementById(callbackName);
                     if (s) document.body.removeChild(s);
                     reject(new Error("GASサーバ応答タイムアウト"));
@@ -1314,6 +1314,8 @@
 
             currentSystem = systemId;
             document.getElementById('header-title').innerText = systemNameMap[systemId] || "位置情報";
+            document.getElementById('header-title').style.textAlign = 'center'; // 改訂要件: 路線系統名は中央揃え
+            document.getElementById('header-title').style.flex = '1'; 
             document.getElementById('home-screen').style.display = 'none';
             zaisenScreen.style.display = 'block';
             document.getElementById('back-button').style.display = 'block';
@@ -1337,6 +1339,8 @@
 
         function showHomeScreen() {
             document.getElementById('header-title').innerText = "ホーム";
+            document.getElementById('header-title').style.textAlign = 'left'; // 改訂要件: ホーム画面のヘッダーは左詰のまま
+            document.getElementById('header-title').style.flex = 'none';
             document.getElementById('home-screen').style.display = 'flex';
             document.getElementById('zaisen-screen').style.display = 'none';
             document.getElementById('back-button').style.display = 'none';
@@ -1787,7 +1791,7 @@
                             } else if (branch === 'ic') {
                                 if (index === 0) {
                                     branchD = `M ${lineX} ${currentY} L ${lineX} ${currentY - ROW_HALF_HEIGHT}`;
-                                    // 線の左側に表示
+                                    // 改訂要件: 線の左に右詰で表示
                                     textX = lineX - 100; 
                                     textY = currentY - (ROW_HALF_HEIGHT / 2);
                                     zoneLeft = lineX - 100; 
@@ -1798,7 +1802,7 @@
                             } else if (branch === 'oc') {
                                 if (index === currentStations.length - 1) {
                                     branchD = `M ${lineX} ${currentY} L ${lineX} ${currentY + ROW_HALF_HEIGHT}`;
-                                    // 線の左側に表示
+                                    // 改訂要件: 線の左に右詰で表示
                                     textX = lineX - 100; 
                                     textY = currentY + (ROW_HALF_HEIGHT / 2);
                                     zoneLeft = lineX - 100; 
@@ -1820,9 +1824,11 @@
                                     textSvg.setAttribute('x', textX);
                                     textSvg.setAttribute('y', (textY - 1).toString());
                                     
-                                    // ic/oc の場合は駅名と同じ色(#333333)にする
+                                    // 改訂要件: ic/oc の場合は駅名と同じ色(#333333)にする、それ以外は白
                                     if (isCenterBranch) {
                                         textSvg.setAttribute('fill', '#333333');
+                                        textSvg.setAttribute('text-anchor', 'end'); // 右詰め表示
+                                        textSvg.setAttribute('x', (lineX - 15).toString()); // 線の少し左側
                                     } else {
                                         textSvg.setAttribute('fill', '#FFFFFF');
                                     }
@@ -1843,7 +1849,7 @@
                                     clickZone.style.height = `${zoneHeight}px`;
                                     clickZone.onclick = (e) => {
                                         e.stopPropagation();
-                                        // 系統（路線系統名）が変更される場合に対応
+                                        // 改訂要件: タップで路線系統が変わった場合、ヘッダーの路線系統名も変える
                                         const nextSystem = railroadMap[branchRouteId] ? railroadMap[branchRouteId]['路線系統'] : currentSystem;
                                         activeLayouts[nextSystem] = `display/${displayDest}.csv`;
                                         loadZaisen(nextSystem, stationId); 
@@ -1911,6 +1917,7 @@
                 btn.innerText = rName;
                 btn.onclick = () => {
                     closeTransferModal();
+                    // 改訂要件: 乗換で路線系統が変わった場合、ヘッダーに表示する路線系統名も変える
                     activeLayouts[sysId] = `display/${sheetName}.csv`;
                     loadZaisen(sysId);
                 };
@@ -2027,7 +2034,7 @@
             });
         }
 
-        // 前後併結・併合判別を含むレンダリング
+        // 改訂要件: 前後併結・併合判別を含むレンダリング
         function renderTrainIcon(train, comp, yPos, dir, lineX, stName, index = 0) {
             const container = document.createElement('div');
             container.className = 'train-container';
@@ -2061,7 +2068,7 @@
             label.className = 'train-no-label';
             label.innerText = displayNoClean;
 
-            // 表示する色は進行方向前側の車両に設定された色を使う
+            // 改訂要件: 表示する色は進行方向前側の車両に設定された色を使う
             if (postInfoFront && postInfoFront.color) {
                 label.style.color = postInfoFront.color;
             }
@@ -2083,7 +2090,7 @@
             container.appendChild(label);
             container.appendChild(icon);
 
-            // 編成ラベルの設定
+            // 改訂要件: 編成名は、駅時刻表や位置情報画面では"前側の編成名+後ろ側の編成名"でセット
             let labelText = "";
             let colorToUse = postInfoFront ? postInfoFront.color : "";
 
@@ -2098,6 +2105,7 @@
             if (labelText) {
                 const formLabel = document.createElement('div');
                 formLabel.className = 'train-formation-label'; 
+                // 改訂要件: 最初の5文字に「…」と表示して省略
                 formLabel.innerText = truncateFormationName(labelText);
                 
                 if (colorToUse) {
@@ -2433,11 +2441,11 @@
             // 時刻表データの統合と始発〜終着駅の連結
             const comp = train.components.find(c => c.trainNo === trainNo) || train.components[0];
             
-            // 列車時刻表ヘッダーの2行化
+            // 改訂要件: 列車時刻表ヘッダーの2行化
             document.getElementById('train-modal-header-l1').innerText = trainNo;
             document.getElementById('train-modal-header-l2').innerText = comp.trainName || comp.type || '普通';
 
-            // 始発駅〜終着駅のドッキング表示
+            // 改訂要件: 始発駅〜終着駅のドッキング表示
             let finalOrigin = comp.originStation || '';
             let finalTerminal = comp.terminalStation || '';
 
@@ -2507,7 +2515,7 @@
                 nameSpan.innerText = pInfo ? (pInfo.name + (pInfo.isSubstitute ? ' *' : '')) : '未定';
                 row2.appendChild(nameSpan);
 
-                // 編成特記事項表示（右揃え、同じ色、枠をはみ出ない）
+                // 改訂要件: 編成特記事項表示（右揃え、同じ色、枠をはみ出ない）
                 if (pInfo && pInfo.notes) {
                     const notesSpan = document.createElement('div');
                     notesSpan.className = 'train-modal-spec-notes';
