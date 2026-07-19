@@ -607,8 +607,8 @@
 
     <div id="nav-menu" class="nav-menu">
         <div class="nav-menu-items-container">
-            <div class="nav-menu-item" onclick="pageReload()">リロード</div>
             <div class="nav-menu-item" onclick="openSettingModal()">設定</div>
+            <div class="nav-menu-item" onclick="pageReload()">リロード</div>
             <div id="last-update" class="nav-menu-item" style="cursor: default; background: none; color: #ccc; font-size: 0.9rem;">
                 最終更新：取得中...
             </div>
@@ -2455,7 +2455,7 @@
                         }
                         if (stTimeArr !== null) {
                             if (stTimeArr < minTime) { minTime = stTimeArr; finalOrigin = c.originStation || st; }
-                            if (stTimeArr > maxTime) { maxTime = stTimeArr; finalTerminal = c.terminalStation || st; }
+                            if (stTimeDep > maxTime) { maxTime = stTimeDep; finalTerminal = c.terminalStation || st; }
                         }
                     });
                 });
@@ -2777,4 +2777,3 @@
     </script>
 </body>
 </html>
-
