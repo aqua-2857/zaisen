@@ -690,7 +690,7 @@
 
             for (const routeMaster of targetRoutes) {
                 const sysFolder = routeMaster['路線系統'];
-                const opPrefix = routeMaster['運用表ID'] || routeMaster['時刻表ID'] || routeMaster['路線ID'];
+                const opPrefix = routeMaster['運用表ID'];
                 const filePrefix = routeMaster['時刻表ID'] || routeMaster['路線ID'];
                 const systemRules = calendarData.filter(row => row['路線系統'] === sysFolder);
 
@@ -713,35 +713,37 @@
                 const folderPath = `railroad/${sysFolder}/${activeDate}`;
                 
                 // 運用表読込
-                try {
-                    const textOp = await safeFetch(`${folderPath}/${opPrefix}_${finalDayKey}_op.csv`);
-                    parseCSV(textOp).forEach(row => {
-                        const unyoId = row['運用ID']; if (!unyoId) return;
-                        const gpMatch = unyoId.match(/^([A-Za-z]+)/);
-                        const unyoGp = gpMatch ? gpMatch[1] : 'unknown';
+                if (opPrefix) {
+                    try {
+                        const textOp = await safeFetch(`${folderPath}/${opPrefix}_${finalDayKey}_op.csv`);
+                        parseCSV(textOp).forEach(row => {
+                            const unyoId = row['運用ID']; if (!unyoId) return;
+                            const gpMatch = unyoId.match(/^([A-Za-z]+)/);
+                            const unyoGp = gpMatch ? gpMatch[1] : 'unknown';
 
-                        let dotGroups = [], allRowTrains = [];
-                        for (let k = 1; k <= 30; k++) {
-                            const cell = row[`列車${k}`]; if (!cell) continue;
-                            const processCell = (val) => {
-                                let m = val.trim().match(/^([A-Za-z0-9]+)(前|後)?/);
-                                if (m && !val.includes("回送") && !val.includes("車セ")) return { baseNo: m[1], pos: m[2] || '単独', unyoGp, unyoNo: row['運用番号'], unyoId };
-                                return null;
-                            };
-                            if (cell.includes('・')) {
-                                let parts = cell.split('・').map(processCell).filter(p => p);
-                                if (parts.length > 0) {
-                                    dotGroups.push(parts.map(p => p.baseNo));
-                                    parts.forEach(p => allRowTrains.push(p));
+                            let dotGroups = [], allRowTrains = [];
+                            for (let k = 1; k <= 30; k++) {
+                                const cell = row[`列車${k}`]; if (!cell) continue;
+                                const processCell = (val) => {
+                                    let m = val.trim().match(/^([A-Za-z0-9]+)(前|後)?/);
+                                    if (m && !val.includes("回送") && !val.includes("車セ")) return { baseNo: m[1], pos: m[2] || '単独', unyoGp, unyoNo: row['運用番号'], unyoId };
+                                    return null;
+                                };
+                                if (cell.includes('・')) {
+                                    let parts = cell.split('・').map(processCell).filter(p => p);
+                                    if (parts.length > 0) {
+                                        dotGroups.push(parts.map(p => p.baseNo));
+                                        parts.forEach(p => allRowTrains.push(p));
+                                    }
+                                } else {
+                                    let p = processCell(cell);
+                                    if (p) { allRowTrains.push(p); dotGroups.push([p.baseNo]); }
                                 }
-                            } else {
-                                let p = processCell(cell);
-                                if (p) { allRowTrains.push(p); dotGroups.push([p.baseNo]); }
                             }
-                        }
-                        opRules.push({ allTrains: allRowTrains, dotGroups });
-                    });
-                } catch(e){}
+                            opRules.push({ allTrains: allRowTrains, dotGroups });
+                        });
+                    } catch(e){}
+                }
 
                 // 時刻表読込
                 for(let dir of ['in', 'out']) {
