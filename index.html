@@ -499,12 +499,6 @@
             padding-top: 4px;
             border-top: 1px dashed #ddd;
         }
-        .train-modal-formation-row {
-            display: flex;
-            justify-content: flex-end;
-            align-items: baseline;
-            width: 100%;
-        }
         .train-modal-notes {
             font-size: 0.75rem;
             font-weight: normal;
@@ -549,7 +543,7 @@
             width: 100%;
         }
         .suggest-list-container {
-            max-height: 150px;
+            max-height: 180px;
             overflow-y: auto;
             border: 1px solid #ccc;
             border-radius: 4px;
@@ -567,6 +561,25 @@
             border-bottom: 1px solid #eee;
             cursor: pointer;
             color: #333;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .suggest-item-primary {
+            font-weight: bold;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+        .suggest-item-notes {
+            font-size: 0.75rem;
+            color: #777;
+            font-weight: normal;
+        }
+        .suggest-item-sub-tag {
+            font-size: 0.75rem;
+            color: red;
+            font-weight: bold;
         }
         .suggest-item:last-child {
             border-bottom: none;
@@ -663,13 +676,11 @@
                 <div id="train-modal-unyo" class="train-modal-meta">
                     <div style="display: flex; justify-content: space-between; align-items: center; width:100%;">
                         <span id="train-modal-unyo-text">運用番号: </span>
+                        <!-- 指示：編成名表示は1箇所のみにするためここに一元化 -->
                         <span id="train-modal-formation-text" style="font-weight: bold; font-size: 1rem;"></span>
                     </div>
-                    <!-- 編成名と編成特記事項の表示枠 -->
+                    <!-- 編成特記事項のみを表示するための専用コンテナ -->
                     <div id="train-modal-formation-detail" class="train-modal-formation-container" style="display:none;">
-                        <div class="train-modal-formation-row">
-                            <span id="train-modal-formation-sub-name" style="font-weight: bold; font-size: 1rem;"></span>
-                        </div>
                         <div id="train-modal-formation-notes" class="train-modal-notes"></div>
                     </div>
                 </div>
@@ -689,7 +700,7 @@
                 <div style="font-size:0.95rem;">列車番号: <span id="form-train-no" style="font-weight:bold;"></span></div>
                 <div style="font-size:0.95rem;">対象運用: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
                 
-                <!-- サジェスト機能付き記入欄（キーボード上ではなく、記入欄直下に選択肢を表示） -->
+                <!-- サジェスト機能付き記入欄 -->
                 <div class="suggest-input-wrapper">
                     <span style="font-weight:bold; font-size:0.9rem; margin-top:5px;">編成を入力または選択してください:</span>
                     <input type="text" id="input-formation-id" placeholder="文字を入力すると絞り込まれます" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;" oninput="filterFormationsSuggest()">
@@ -1085,6 +1096,24 @@
             return '';
         }
 
+        // 表示先定義（分岐表示先 or 乗換表示先）の文字列情報から路線系統情報を逆引きして自動解決するヘルパー
+        function getSystemIdFromDisplayDest(displayDest, routeIdsString = '') {
+            // カンマ区切り定義や、部分定義に対応するため、マスタ全体から一致する路線IDの路線系統を探します
+            if (routeIdsString) {
+                const routeIdFirst = routeIdsString.split(',')[0].trim();
+                const sysId = getSystemIdByRouteId(routeIdFirst);
+                if (sysId) return sysId;
+            }
+            // CSVファイル名から系統を抽出するフォールバック
+            if (displayDest) {
+                const parts = displayDest.split('-');
+                if (parts[0] && systemNameMap[parts[0]]) {
+                    return parts[0];
+                }
+            }
+            return currentSystem;
+        }
+
         async function loadZaisen(systemId, anchorStationId = null, layoutCsvPath = null) {
             const loader = document.getElementById('loading-screen');
             const zaisenScreen = document.getElementById('zaisen-screen');
@@ -1424,7 +1453,7 @@
                     if (!stationId) return;
                     const stationName = stationsMap[stationId] || stationId;
 
-                    // 指示通り、列名「表示先」を「分岐表示先」に変更して取得
+                    // 列名「表示先」を「分岐表示先」に変更して取得
                     const displayDestCol = row['分岐表示先'] || row['表示先'] || '';
 
                     const blockDiv = document.createElement('div');
@@ -1582,7 +1611,7 @@
                                         e.stopPropagation();
                                         
                                         // 分岐タップで路線系統が変わる場合の同時一発切り替え処理
-                                        const nextSystemId = getSystemIdByRouteId(branchRouteId) || currentSystem;
+                                        const nextSystemId = getSystemIdFromDisplayDest(displayDest, branchRouteId);
                                         const nextLayoutPath = `display/${displayDest}.csv`;
                                         
                                         // 次の系統の最後の記憶（activeLayouts）を更新
@@ -1724,7 +1753,7 @@
             label.className = 'train-no-label';
             label.innerText = displayNo;
             
-            // 指示に従い、列車番号表示枠の幅を列車アイコンの1.4倍(34px)に完全に固定
+            // 列車番号表示枠の幅を列車アイコンの1.4倍(34px)に完全に固定
             label.style.width = '100%';
             label.style.boxSizing = 'border-box';
             
@@ -1753,7 +1782,7 @@
                 const formLabel = document.createElement('div');
                 formLabel.className = 'train-formation-label'; 
                 
-                // 指示に従い、編成名ラベル枠の幅を列車アイコンの1.4倍(34px)に固定し、7文字超の場合は「…」省略
+                // 編成名ラベル枠の幅を列車アイコンの1.4倍(34px)に固定し、7文字超の場合は「…」省略
                 formLabel.style.width = '100%';
                 formLabel.style.boxSizing = 'border-box';
                 formLabel.innerText = limitFormationName(postInfo.name);
@@ -1859,8 +1888,8 @@
                     closeTransferChoiceModal();
                     closeModal();
                     
-                    // 乗換先の路線系統IDを取得して一発切り替え
-                    const nextSystemId = getSystemIdByRouteId(rId) || currentSystem;
+                    // 乗換先の路線系統IDを逆引きして一発切り替え
+                    const nextSystemId = getSystemIdFromDisplayDest(dest, rId);
                     const nextLayoutPath = `display/${dest}.csv`;
                     
                     // 次の系統の最後の記憶（activeLayouts）を更新
@@ -2028,7 +2057,7 @@
                     formDiv.style.position = 'relative';
                     
                     if (postInfo && postInfo.name) {
-                        // 指示に従い、7文字を超える場合は「…」に省略して5文字で表示
+                        // 7文字を超える場合は「…」に省略して5文字で表示
                         formDiv.innerText = limitFormationName(postInfo.name);
                         if (postInfo.color) {
                             formDiv.style.color = postInfo.color;
@@ -2113,26 +2142,23 @@
 
             const formTextEl = document.getElementById('train-modal-formation-text');
             const formDetailContainer = document.getElementById('train-modal-formation-detail');
-            const formSubNameEl = document.getElementById('train-modal-formation-sub-name');
             const formNotesEl = document.getElementById('train-modal-formation-notes');
 
+            // 指示：重複表示を避けるため、編成名の表示はこのヘッダー横の1つのみに統一。
             if (postInfo && postInfo.name) {
                 formTextEl.innerText = postInfo.name + (postInfo.isSubstitute ? ' *' : '');
                 if (postInfo.color) {
                     formTextEl.style.color = postInfo.color;
                 }
                 
-                // 指示に従い、投稿編成の特記事項が存在する場合の描画
+                // 特記事項がある場合は右寄せ細字で表示し、表示枠の高さを中身に合わせる
                 if (postInfo.notes) {
                     formDetailContainer.style.display = 'flex';
-                    formSubNameEl.innerText = postInfo.name;
                     formNotesEl.innerText = postInfo.notes;
                     
                     if (postInfo.color) {
-                        formSubNameEl.style.color = postInfo.color;
                         formNotesEl.style.color = postInfo.color;
                     } else {
-                        formSubNameEl.style.color = '#333';
                         formNotesEl.style.color = '#333';
                     }
                 } else {
@@ -2192,7 +2218,7 @@
                 rowDiv.onclick = () => {
                     closeTrainModal();
                     
-                    // タップした駅の乗換定義をレイアウト定義（currentStations）から取得する
+                    // タップした駅の乗換定義を現在のレイアウト（currentStations）から取得する
                     const matchingLayoutSt = currentStations.find(stRow => stRow['駅ID'] === sId);
                     const tRouteId = matchingLayoutSt ? (matchingLayoutSt['乗換路線'] || '') : '';
                     const tDest = matchingLayoutSt ? (matchingLayoutSt['乗換表示先'] || '') : '';
@@ -2264,14 +2290,14 @@
             normalFormations.forEach(form => {
                 currentModalAllowedFormations.push({
                     name: form.name,
-                    displayText: form.name,
+                    notes: form.notes,
                     isSubstitute: false
                 });
             });
             substituteFormations.forEach(form => {
                 currentModalAllowedFormations.push({
                     name: form.name,
-                    displayText: `${form.name} [代走]`,
+                    notes: form.notes,
                     isSubstitute: true
                 });
             });
@@ -2292,7 +2318,7 @@
             document.getElementById('formation-modal').style.display = 'flex';
         }
 
-        // 指示：キーボード上ではなく、記入欄直下のカスタムリストエリアに選択肢を表示して絞り込むサジェスト関数
+        // キーボード上ではなく、記入欄直下のカスタムリストエリアに選択肢を表示して絞り込む
         function filterFormationsSuggest() {
             const inputVal = document.getElementById('input-formation-id').value.trim().toLowerCase();
             const suggestListDiv = document.getElementById('formation-suggest-list');
@@ -2309,7 +2335,28 @@
                 filtered.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'suggest-item';
-                    div.innerText = item.displayText;
+                    
+                    // 指示通り、サジェスト項目内の構造を整形： 編成名 (特記事項) [代走] 
+                    const primaryRow = document.createElement('div');
+                    primaryRow.className = 'suggest-item-primary';
+                    primaryRow.innerText = item.name;
+                    
+                    if (item.notes) {
+                        const notesSpan = document.createElement('span');
+                        notesSpan.className = 'suggest-item-notes';
+                        notesSpan.innerText = `(${item.notes})`;
+                        primaryRow.appendChild(notesSpan);
+                    }
+                    
+                    if (item.isSubstitute) {
+                        const subSpan = document.createElement('span');
+                        subSpan.className = 'suggest-item-sub-tag';
+                        subSpan.innerText = '[代走]';
+                        primaryRow.appendChild(subSpan);
+                    }
+                    
+                    div.appendChild(primaryRow);
+                    
                     div.onclick = () => {
                         document.getElementById('input-formation-id').value = item.name;
                         suggestListDiv.classList.remove('active');
