@@ -664,17 +664,17 @@
     <div id="formation-modal" class="modal-overlay" style="display:none;" onclick="closeFormationModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <span class="modal-header-title-left">編成情報の投稿</span>
+                <span class="modal-header-title-left">運用情報の投稿</span>
                 <button class="modal-close-btn" onclick="closeFormationModal()">×</button>
             </div>
             <div class="modal-scroll-body" style="display:flex; flex-direction:column; gap:12px;">
                 <div style="font-size:0.95rem;">列車番号: <span id="form-train-no" style="font-weight:bold;"></span></div>
-                <div style="font-size:0.95rem;">対象運用: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
+                <div style="font-size:0.95rem;">運用番号: <span id="form-unyo-no" style="font-weight:bold;"></span></div>
                 
                 <!-- サジェスト機能付き記入欄（キーボード上ではなく、記入欄直下に選択肢を表示） -->
                 <div class="suggest-input-wrapper">
-                    <span style="font-weight:bold; font-size:0.9rem; margin-top:5px;">編成を入力または選択してください:</span>
-                    <input type="text" id="input-formation-id" placeholder="文字を入力すると絞り込まれます" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;" oninput="filterFormationsSuggest()">
+                    <span style="font-weight:bold; font-size:0.9rem; margin-top:5px;">編成名または車両形式:</span>
+                    <input type="text" id="input-formation-id" placeholder="入力または下から選択" style="padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; width:100%;" oninput="filterFormationsSuggest()">
                     <div id="formation-suggest-list" class="suggest-list-container"></div>
                 </div>
 
@@ -1243,7 +1243,7 @@
                             let dotGroups = [];
                             let allRowTrains = [];
 
-                            for (let k = 1; k <= 30; k++) {
+                            for (let k = 1; k <= 80; k++) {
                                 const cell = row[`列車${k}`];
                                 if (!cell) continue;
 
@@ -2322,7 +2322,7 @@
             const formationName = inputEl.value.trim(); 
 
             if (!formationName || !unyoId) {
-                alert("編成を入力または選択してください。");
+                alert("編成名または車両形式を入力、選択してください。");
                 return;
             }
 
