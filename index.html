@@ -1,4 +1,3 @@
-<!-- 在線2026/07/17 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1135,40 +1134,36 @@
             document.getElementById('back-button').style.display = 'none';
         }
 
-        // 祝日CSV判定ロジック：あらゆるゼロ省略・表記揺れに耐える数値分割比較にアップグレード
         async function checkIsHolidayAPI(targetDate) {
             try {
-                const res = await fetch('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv');
+                // 指定されたスプレッドシート公開CSVから直接年月日データを取得して照合します
+                const res = await fetch('https://docs.google.com/spreadsheets/d/e/2PACX-1vT14zojbbM2FudmJYrNt6wxACgeYQ-Bw0x8bbGpD_0pcbPcnk4nBT09wm1eVl8HX4CLWcW71Kv9bqTF/pub?gid=0&single=true&output=csv');
                 if (!res.ok) return false;
-                const buffer = await res.arrayBuffer();
-                const decoder = new TextDecoder('shift-jis');
-                const text = decoder.decode(buffer);
+                
+                // スプレッドシート側のCSVはUTF-8で配信されるため、Shift-JISデコード処理を排して直接テキストとして取得可能
+                const text = await res.text();
                 const lines = text.split('\n');
                 
                 const ty = targetDate.getFullYear();
                 const tm = targetDate.getMonth() + 1;
                 const td = targetDate.getDate();
+                
+                // マッチング用の「年/月/日」表記および「年/月(2桁)/日(2桁)」のゼロ埋め表記を生成
+                const targetStr = `${ty}/${tm}/${td}`;
+                const targetStrZero = `${ty}/${String(tm).padStart(2,'0')}/${String(td).padStart(2,'0')}`;
 
                 for(let i = 1; i < lines.length; i++) {
                     const cols = lines[i].split(',');
-                    if(cols[0]) {
-                        const csvDateStr = cols[0].trim();
-                        // 2020/3/14、2020/03/14、2020/03/4 などすべてのパターンを「/」でバラして数値変換
-                        const dateParts = csvDateStr.split('/');
-                        if (dateParts.length === 3) {
-                            const csvYear = parseInt(dateParts[0], 10);
-                            const csvMonth = parseInt(dateParts[1], 10);
-                            const csvDay = parseInt(dateParts[2], 10);
-                            
-                            // 文字列としてのマッチングではなく「数値」同士で正確に比較することで100%誤判定を防ぐ
-                            if (csvYear === ty && csvMonth === tm && csvDay === td) {
-                                return true;
-                            }
+                    // スプレッドシートCSVのD列(年月日)はインデックス3に位置します
+                    if(cols[3]) {
+                        const csvDate = cols[3].trim();
+                        if(csvDate === targetStr || csvDate === targetStrZero) {
+                            return true;
                         }
                     }
                 }
             } catch (e) {
-                console.error("祝日データの取得に失敗しました:", e);
+                console.error("スプレッドシートからの祝日データの取得または解析に失敗しました:", e);
             }
             return false;
         }
@@ -1562,7 +1557,7 @@
                                     textSvg.setAttribute('y', (textY - 1).toString());
                                     
                                     if (isCenterBranch) {
-                                        // ic, ocの場合：駅名と同じ色(#333)、右詰め(text-anchor: end)
+                                        // ic, ocの場合：駅名と同じ色(#333333)、右詰め(text-anchor: end)
                                         textSvg.setAttribute('fill', '#333333');
                                         textSvg.setAttribute('text-anchor', 'end');
                                     } else {
