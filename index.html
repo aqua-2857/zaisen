@@ -1135,6 +1135,7 @@
             document.getElementById('back-button').style.display = 'none';
         }
 
+        // 祝日CSV判定ロジック：あらゆるゼロ省略・表記揺れに耐える数値分割比較にアップグレード
         async function checkIsHolidayAPI(targetDate) {
             try {
                 const res = await fetch('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv');
@@ -1147,15 +1148,22 @@
                 const ty = targetDate.getFullYear();
                 const tm = targetDate.getMonth() + 1;
                 const td = targetDate.getDate();
-                const targetStr = `${ty}/${tm}/${td}`;
-                const targetStrZero = `${ty}/${String(tm).padStart(2,'0')}/${String(td).padStart(2,'0')}`;
 
                 for(let i = 1; i < lines.length; i++) {
                     const cols = lines[i].split(',');
                     if(cols[0]) {
-                        const csvDate = cols[0].trim();
-                        if(csvDate === targetStr || csvDate === targetStrZero) {
-                            return true;
+                        const csvDateStr = cols[0].trim();
+                        // 2020/3/14、2020/03/14、2020/03/4 などすべてのパターンを「/」でバラして数値変換
+                        const dateParts = csvDateStr.split('/');
+                        if (dateParts.length === 3) {
+                            const csvYear = parseInt(dateParts[0], 10);
+                            const csvMonth = parseInt(dateParts[1], 10);
+                            const csvDay = parseInt(dateParts[2], 10);
+                            
+                            // 文字列としてのマッチングではなく「数値」同士で正確に比較することで100%誤判定を防ぐ
+                            if (csvYear === ty && csvMonth === tm && csvDay === td) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -2414,4 +2422,3 @@
     </script>
 </body>
 </html>
-
