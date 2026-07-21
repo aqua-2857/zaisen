@@ -1,3 +1,4 @@
+<!-- 在線2026/07/20 -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -497,7 +498,6 @@
             width: 100%;
             white-space: normal;
             word-break: break-all;
-            border-top: 1px dashed #ddd;
             padding-top: 4px;
         }
         .train-timetable-row {
@@ -579,10 +579,10 @@
     </div>
 
     <div id="nav-menu" class="nav-menu">
+        <div class="nav-menu-item" onclick="pageReload()">リロード</div>
         <div id="last-update" class="nav-menu-item" style="cursor: default; background: none; color: #ccc; font-size: 0.9rem;">
             最終更新：取得中...
         </div>
-        <div class="nav-menu-item" onclick="pageReload()">リロード</div>
     </div>
     <div id="menu-overlay" class="menu-overlay" onclick="toggleMenu()"></div>
 
@@ -678,8 +678,8 @@
                 </div>
 
                 <div style="display:flex; gap: 8px; margin-top:8px;">
-                    <button onclick="submitFormation()" style="flex: 1; padding:12px; background:var(--btn-color); color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer;">投稿する</button>
                     <button id="btn-delete-post" onclick="deleteFormationPost()" style="flex: 1; padding:12px; background:#FF3B30; color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer; display:none;">投稿を取り消す</button>
+                    <button onclick="submitFormation()" style="flex: 1; padding:12px; background:var(--btn-color); color:white; border:none; border-radius:4px; font-size:1rem; font-weight:bold; cursor:pointer;">投稿する</button>
                 </div>
             </div>
         </div>
@@ -1496,7 +1496,7 @@
                             let textY = 0;
                             let zoneLeft = 0, zoneTop = 0, zoneWidth = 0, zoneHeight = ROW_HALF_HEIGHT;
                             
-                            // 分岐におけるic, ocの場合、路線名は駅名と同じ色(#333)で、線の左に右詰めで表示
+                            // 分岐におけるic, ocの場合、路線名は駅名と同じ色(#333)で、線の左に右詰目で表示
                             let isCenterBranch = (branch === 'ic' || branch === 'oc');
                             
                             if (branch === 'il') {
