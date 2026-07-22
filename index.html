@@ -2396,13 +2396,13 @@
             if (frontUnyo) {
                 currentPostUnyoEntries.push({
                     unyo: isOut ? (backUnyo || frontUnyo) : frontUnyo,
-                    label: unyoList.length > 1 ? (isOut ? '進行方向前側（後ろ運用）' : '進行方向前側（前運用）') : '運用'
+                    label: unyoList.length > 1 ? (isOut ? '前方車両（上り方）' : '前方車両（下り方）') : '運用'
                 });
             }
             if (backUnyo && backUnyo !== frontUnyo) {
                 currentPostUnyoEntries.push({
                     unyo: isOut ? frontUnyo : backUnyo,
-                    label: isOut ? '進行方向後ろ側（上り方面）' : '進行方向後ろ側（下り方面）'
+                    label: isOut ? '後方車両（下り方）' : '後方車両（上り方）'
                 });
             }
 
@@ -2414,14 +2414,14 @@
 
                 const title = document.createElement('div');
                 title.className = 'unyo-post-card-title';
-                title.innerText = `${entry.label} - 運用番号: ${entry.unyo.unyoNo || 'なし'}`;
+                title.innerText = `運用番号: ${entry.unyo.unyoNo || 'なし'}`;
                 card.appendChild(title);
 
                 const directionGuide = document.createElement('div');
-                directionGuide.style.cssText = 'font-size:0.8rem; font-weight:bold; color:#666; margin-top:2px;';
-                directionGuide.innerText = `◀︎${topStationName}　${bottomStationName}方面▶︎`;
+                directionGuide.style.cssText = 'font-size:0.8rem; font-weight:bold; color:#666; margin-top:2px; display:flex; justify-content:space-between;';
+                directionGuide.innerHTML = `<span>◀︎${topStationName}</span><span>${bottomStationName}方面▶︎</span>`;
                 card.appendChild(directionGuide);
-
+                
                 const wrapper = document.createElement('div');
                 wrapper.className = 'suggest-input-wrapper';
 
