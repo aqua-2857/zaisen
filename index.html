@@ -764,14 +764,20 @@
             }
         };
 
-        // 表示用文字列の先頭5文字制限処理（最初の5文字+…）
-        function limitFormationName(name) {
-            if (!name) return "";
-            if (name.length > 7) {
-                return name.substring(0, 5) + "…";
+        function createFormationNameElement(name) {
+            const span = document.createElement('span');
+            if (!name) return span;
+
+            if (name.length > 6) {
+                span.innerText = name.substring(0, 5) + "…";
+                span.style.fontSize = "0.9em"; // 6文字を超えたら0.9倍
+            } else {
+                span.innerText = name;
             }
-            return name;
+            return span;
         }
+
+        card.appendChild(createFormationNameElement(formationName));
 
         function timeToSeconds(timeStr) {
             if (!timeStr) return null;
